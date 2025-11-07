@@ -714,16 +714,15 @@ function generateOverallData() {
   if (filterConfigSheet) {
     // Get time period filters only (for Overall Data)
     const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
-    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
-    const monthYearFilter = filterConfigSheet.getRange(13, 2).getValue(); // Month-Year filter
+    const halvesFilter = filterConfigSheet.getRange(12, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(13, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
+    } else if (halvesFilter) {
+      timePeriodFilter = { type: 'halves', value: parseInt(halvesFilter.replace("H", ""), 10) };
     } else if (quarterFilter) {
       timePeriodFilter = { type: 'quarter', value: parseInt(quarterFilter.replace("Q", ""), 10) };
-    } else if (monthYearFilter) {
-      const selectedMonths = monthYearFilter.split(",").map(m => m.trim());
-      timePeriodFilter = { type: 'month-year', value: selectedMonths };
     }
   }
   
@@ -747,7 +746,8 @@ function generateOverallData() {
         end: periodEnd,
         label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy"),
         year: periodStart.getFullYear(),
-        quarter: Math.floor(periodStart.getMonth() / 3) + 1
+        quarter: Math.floor(periodStart.getMonth() / 3) + 1,
+        half: periodStart.getMonth() < 6 ? 1 : 2 // H1 = Jan-Jun (months 0-5), H2 = Jul-Dec (months 6-11)
       });
     }
     
@@ -763,13 +763,14 @@ function generateOverallData() {
     if (timePeriodFilter.type === 'year') {
       periods = allPeriods.filter(p => p.year === timePeriodFilter.value);
       Logger.log(`After Year filter (${timePeriodFilter.value}): ${periods.length} periods (from ${beforeFilter})`);
+    } else if (timePeriodFilter.type === 'halves') {
+      // For halves, filter by half number (works across years)
+      periods = allPeriods.filter(p => p.half === timePeriodFilter.value);
+      Logger.log(`After Halves filter (H${timePeriodFilter.value}): ${periods.length} periods (from ${beforeFilter})`);
     } else if (timePeriodFilter.type === 'quarter') {
       // For quarter, filter by quarter number (works across years)
       periods = allPeriods.filter(p => p.quarter === timePeriodFilter.value);
       Logger.log(`After Quarter filter (Q${timePeriodFilter.value}): ${periods.length} periods (from ${beforeFilter})`);
-    } else if (timePeriodFilter.type === 'month-year') {
-      periods = allPeriods.filter(p => timePeriodFilter.value.includes(p.label));
-      Logger.log(`After Month-Year filter: ${periods.length} periods (from ${beforeFilter})`);
     }
   } else {
     Logger.log(`No time period filter applied, using all ${periods.length} periods`);
@@ -873,12 +874,12 @@ function generateOverallData() {
     if (timePeriodFilter.type === 'year') {
       filterLabels.push("Year:");
       filterValues.push(timePeriodFilter.value);
+    } else if (timePeriodFilter.type === 'halves') {
+      filterLabels.push("Halves:");
+      filterValues.push(`H${timePeriodFilter.value}`);
     } else if (timePeriodFilter.type === 'quarter') {
       filterLabels.push("Quarter:");
       filterValues.push(`Q${timePeriodFilter.value}`);
-    } else if (timePeriodFilter.type === 'month-year') {
-      filterLabels.push("Month-Year:");
-      filterValues.push(timePeriodFilter.value.join(", "));
     }
   }
   
@@ -1015,8 +1016,8 @@ function createFilterConfigSheet() {
   
   configSheet.getRange(10, 1).setValue("Filter Type:");
   configSheet.getRange(11, 1).setValue("Year:");
-  configSheet.getRange(12, 1).setValue("Quarter:");
-  configSheet.getRange(13, 1).setValue("Month-Year (comma-separated):");
+  configSheet.getRange(12, 1).setValue("Halves:");
+  configSheet.getRange(13, 1).setValue("Quarter:");
   
   // Year dropdown (2024, 2025, 2026, etc.)
   const currentYear = new Date().getFullYear();
@@ -1033,17 +1034,21 @@ function createFilterConfigSheet() {
   configSheet.getRange(11, 3).setFontStyle("italic");
   configSheet.getRange(11, 3).setFontColor("#666666");
   
+  // Halves dropdown (H1 = Jan-Jun, H2 = Jul-Dec)
+  const halvesRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["", "H1", "H2"], true)
+    .build();
+  configSheet.getRange(12, 2).setDataValidation(halvesRule);
+  configSheet.getRange(12, 3).setValue("(e.g., H1 or H2)");
+  configSheet.getRange(12, 3).setFontStyle("italic");
+  configSheet.getRange(12, 3).setFontColor("#666666");
+  
   // Quarter dropdown
   const quarterRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(["", "Q1", "Q2", "Q3", "Q4"], true)
     .build();
-  configSheet.getRange(12, 2).setDataValidation(quarterRule);
-  configSheet.getRange(12, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
-  configSheet.getRange(12, 3).setFontStyle("italic");
-  configSheet.getRange(12, 3).setFontColor("#666666");
-  
-  // Month-Year (text input for comma-separated values)
-  configSheet.getRange(13, 3).setValue("(e.g., Jan 2024, Feb 2024, Mar 2024)");
+  configSheet.getRange(13, 2).setDataValidation(quarterRule);
+  configSheet.getRange(13, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
   configSheet.getRange(13, 3).setFontStyle("italic");
   configSheet.getRange(13, 3).setFontColor("#666666");
   
@@ -1052,7 +1057,7 @@ function createFilterConfigSheet() {
   configSheet.getRange(15, 1).setFontWeight("bold");
   configSheet.getRange(16, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
   configSheet.getRange(17, 1).setValue("2. For Overall Data & Headcount Metrics: Use Time Period filters to limit date range");
-  configSheet.getRange(18, 1).setValue("3. Time Period: Select Year OR Quarter OR enter Month-Year (comma-separated)");
+  configSheet.getRange(18, 1).setValue("3. Time Period: Select Year OR Halves OR Quarter");
   configSheet.getRange(19, 1).setValue("4. Run 'Generate Overall Data' or 'Generate Headcount Metrics' from menu");
   configSheet.getRange(20, 1).setValue("5. Filters apply: Site/ELT/Dept → Headcount Metrics only; Time Period → Overall Data & Headcount Metrics");
   
@@ -1153,7 +1158,8 @@ function generateHeadcountMetrics() {
         end: periodEnd,
         label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy"),
         year: periodStart.getFullYear(),
-        quarter: Math.floor(periodStart.getMonth() / 3) + 1
+        quarter: Math.floor(periodStart.getMonth() / 3) + 1,
+        half: periodStart.getMonth() < 6 ? 1 : 2 // H1 = Jan-Jun (months 0-5), H2 = Jul-Dec (months 6-11)
       });
     }
     
@@ -1165,21 +1171,21 @@ function generateHeadcountMetrics() {
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
     const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
-    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
-    const monthYearFilter = filterConfigSheet.getRange(13, 2).getValue(); // Month-Year filter
+    const halvesFilter = filterConfigSheet.getRange(12, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(13, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       // Filter by year
       const filterYear = parseInt(yearFilter, 10);
       periods = periods.filter(p => p.year === filterYear);
+    } else if (halvesFilter) {
+      // Filter by halves (H1 = Jan-Jun, H2 = Jul-Dec)
+      const halfNum = parseInt(halvesFilter.replace("H", ""), 10);
+      periods = periods.filter(p => p.half === halfNum);
     } else if (quarterFilter) {
       // Filter by quarter (Q1, Q2, Q3, Q4)
       const quarterNum = parseInt(quarterFilter.replace("Q", ""), 10);
       periods = periods.filter(p => p.quarter === quarterNum);
-    } else if (monthYearFilter) {
-      // Filter by month-year (comma-separated, e.g., "Jan 2024, Feb 2024, Mar 2024")
-      const selectedMonths = monthYearFilter.split(",").map(m => m.trim());
-      periods = periods.filter(p => selectedMonths.includes(p.label));
     }
     // If no time period filter, use all periods
   }
@@ -1764,16 +1770,15 @@ function generateTerminationReasonsTable() {
   let timePeriodFilter = null;
   if (filterConfigSheet) {
     const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
-    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
-    const monthYearFilter = filterConfigSheet.getRange(13, 2).getValue(); // Month-Year filter
+    const halvesFilter = filterConfigSheet.getRange(12, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(13, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
+    } else if (halvesFilter) {
+      timePeriodFilter = { type: 'halves', value: parseInt(halvesFilter.replace("H", ""), 10) };
     } else if (quarterFilter) {
       timePeriodFilter = { type: 'quarter', value: parseInt(quarterFilter.replace("Q", ""), 10) };
-    } else if (monthYearFilter) {
-      const selectedMonths = monthYearFilter.split(",").map(m => m.trim());
-      timePeriodFilter = { type: 'month-year', value: selectedMonths };
     }
   }
   
@@ -1803,23 +1808,14 @@ function generateTerminationReasonsTable() {
     const termYear = termDate.getFullYear();
     const termMonth = termDate.getMonth();
     const termQuarter = Math.floor(termMonth / 3) + 1;
-    const termLabel = Utilities.formatDate(termDate, Session.getScriptTimeZone(), "MMM yyyy");
+    const termHalf = termMonth < 6 ? 1 : 2; // H1 = Jan-Jun (months 0-5), H2 = Jul-Dec (months 6-11)
     
     if (timePeriodFilter.type === 'year') {
       return termYear === timePeriodFilter.value;
+    } else if (timePeriodFilter.type === 'halves') {
+      return termHalf === timePeriodFilter.value;
     } else if (timePeriodFilter.type === 'quarter') {
-      // For quarter, check if the month-year label matches any month in that quarter
-      // Q1: Jan, Feb, Mar; Q2: Apr, May, Jun; Q3: Jul, Aug, Sep; Q4: Oct, Nov, Dec
-      const quarterMonths = {
-        1: ['Jan', 'Feb', 'Mar'],
-        2: ['Apr', 'May', 'Jun'],
-        3: ['Jul', 'Aug', 'Sep'],
-        4: ['Oct', 'Nov', 'Dec']
-      };
-      const monthAbbr = termLabel.split(' ')[0];
-      return quarterMonths[timePeriodFilter.value] && quarterMonths[timePeriodFilter.value].includes(monthAbbr);
-    } else if (timePeriodFilter.type === 'month-year') {
-      return timePeriodFilter.value.includes(termLabel);
+      return termQuarter === timePeriodFilter.value;
     }
     return true;
   };
@@ -1901,10 +1897,10 @@ function generateTerminationReasonsTable() {
     if (timePeriodFilter) {
       if (timePeriodFilter.type === 'year') {
         filterInfo.push(`Year: ${timePeriodFilter.value}`);
+      } else if (timePeriodFilter.type === 'halves') {
+        filterInfo.push(`Halves: H${timePeriodFilter.value}`);
       } else if (timePeriodFilter.type === 'quarter') {
         filterInfo.push(`Quarter: Q${timePeriodFilter.value}`);
-      } else if (timePeriodFilter.type === 'month-year') {
-        filterInfo.push(`Months: ${timePeriodFilter.value.join(", ")}`);
       }
     }
     termReasonsSheet.getRange(filterInfoRow, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
