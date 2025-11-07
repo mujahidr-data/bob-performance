@@ -153,14 +153,16 @@ Generates site-wise headcount metrics month-on-month. Creates/updates "Headcount
 
 **Features:**
 - Supports aggregation by Halves or Quarters
-- Clears existing data but preserves formatting when aggregation is used
+- Clears entire sheet contents (preserves formatting) before writing new data
+- Uses getMaxRows() and getMaxColumns() to ensure complete data clearing
 
 #### `generateHeadcountByELT()`
 Generates ELT-wise headcount metrics month-on-month. Creates/updates "Headcount by ELT" sheet.
 
 **Features:**
 - Supports aggregation by Halves or Quarters
-- Clears existing data but preserves formatting when aggregation is used
+- Clears entire sheet contents (preserves formatting) before writing new data
+- Uses getMaxRows() and getMaxColumns() to ensure complete data clearing
 
 #### `generateHeadcountByJobLevel()`
 Generates job level headcount as of today with site-level breakdowns. Creates/updates "Headcount by Job Level" sheet.
@@ -172,8 +174,10 @@ Generates job level headcount as of today with site-level breakdowns. Creates/up
 Generates termination reasons breakdown (Overall, by Site, by ELT). Creates/updates "Terminations Reasons Drilldown" sheet.
 
 **Features:**
-- Supports filtering by Year + Period Type (Halves or Quarters)
+- Supports filtering by Year + specific Period (H1, H2, Q1, Q2, Q3, Q4, or blank for all)
 - Fully clears sheet (data + formatting) when filters are applied to prevent formatting issues
+- Gridlines hidden and columns auto-resized for clean appearance
+- Auto-resizes columns A-C, E-G, I-K on every generation
 
 #### `getUniqueFilterValues()`
 Extracts unique values for Site, ELT, Department, and Termination Reasons from RawData sheet.
@@ -197,6 +201,15 @@ Creates a "FilterConfig" sheet with dropdown menus for selecting filters. Users 
 #### `hideProcessingSheets(ss)`
 Automatically hides processing sheets (RawData, FilterOptions, Termination Reason Mapping) after processing is completed.
 
+#### `createUserGuide()`
+Creates a user-friendly guide sheet with formatted instructions, icons, and best practices.
+
+**Features:**
+- Includes Quick Start, Available Reports, Filtering Options, and Tips sections
+- Gridlines hidden and formatted with colors and proper spacing
+- Automatically inserted at the beginning of the spreadsheet
+- Column widths optimized for readability
+
 ### Menu Structure
 The `onOpen()` function creates a "Bob HR Analytics" menu with:
 - **Fetch Bob Report**: Imports data from Bob API
@@ -207,6 +220,7 @@ The `onOpen()` function creates a "Bob HR Analytics" menu with:
 - **Generate Terminations Reasons Drilldown**: Generates termination reasons breakdown
 - **Create Filter Config Sheet**: Sets up filter selection interface
 - **Update Filter Options**: Refreshes unique filter values
+- **Create/Update User Guide**: Creates formatted user guide with instructions
 
 ### Workflow
 
@@ -237,13 +251,19 @@ The `onOpen()` function creates a "Bob HR Analytics" menu with:
 - **Headcount by ELT**: ELT-wise headcount metrics (auto-generated)
 - **Headcount by Job Level**: Job level headcount with charts (auto-generated)
 - **Terminations Reasons Drilldown**: Termination reasons breakdown (auto-generated)
+  - Gridlines hidden, columns auto-resized
 - **FilterOptions**: Contains unique filter values for review (optional, hidden after processing)
 - **FilterConfig**: Contains filter selection dropdowns (optional)
+  - Column B formatted with 250px width and center-aligned values
 - **Termination Reason Mapping**: Mapping sheet for cleaning termination reasons (optional, hidden after processing)
+- **User Guide**: Formatted guide sheet with instructions and best practices (optional)
 
 ### Notes
 - All date comparisons use inclusive start dates and exclusive end dates for closing headcount
 - Percentage values are rounded to 1 decimal place
 - Empty termination dates are treated as active employees
 - Filters use exact string matching (case-sensitive)
+- Headcount by Site and Headcount by ELT clear entire sheet contents before writing new data
+- Terminations Reasons Drilldown supports specific period selection (H1, H2, Q1, Q2, Q3, Q4)
+- FilterConfig column B is formatted with increased width and center alignment for better visibility
 

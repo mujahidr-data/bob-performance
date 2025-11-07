@@ -115,8 +115,9 @@ The "Bob HR Analytics" menu provides:
 6. **Generate Terminations Reasons Drilldown**
    - Generates termination reasons breakdown (Overall, by Site, by ELT)
    - Creates/updates "Terminations Reasons Drilldown" sheet
-   - Supports filtering by Year + Period Type (Halves or Quarters)
+   - Supports filtering by Year + specific Period (H1, H2, Q1, Q2, Q3, Q4, or all)
    - Fully clears and reformats sheet when filters are applied
+   - Gridlines hidden and columns auto-resized for clean appearance
 
 7. **Create Filter Config Sheet**
    - Creates "FilterConfig" sheet with dropdown menus
@@ -128,6 +129,12 @@ The "Bob HR Analytics" menu provides:
    - Creates "FilterOptions" sheet
    - Lists all unique values for review/vetting
    - Helps identify available filter options
+
+9. **Create/Update User Guide**
+   - Creates a formatted "User Guide" sheet with step-by-step instructions
+   - Includes icons, color-coded sections, and best practices
+   - Gridlines hidden for clean appearance
+   - Accessible from the menu for easy reference
 
 ### Workflow
 
@@ -157,6 +164,15 @@ The "Bob HR Analytics" menu provides:
    - Select "Halves" to aggregate by H1/H2, or "Quarters" to aggregate by Q1-Q4
 4. Run "Generate All CIQ", "Generate Headcount by Site", or "Generate Headcount by ELT"
 5. View aggregated results (existing data is cleared but formatting is preserved)
+
+#### Termination Reasons with Specific Periods
+1. Run "Fetch Bob Report" to import data
+2. Run "Create Filter Config Sheet"
+3. In "FilterConfig" sheet, go to "Terminations Reasons Drilldown" section:
+   - Select a Year
+   - Select a specific Period: H1, H2, Q1, Q2, Q3, or Q4 (or leave blank for all periods)
+4. Run "Generate Terminations Reasons Drilldown"
+5. View filtered termination reasons breakdown
 
 ## Key Functions
 
@@ -192,8 +208,15 @@ Generates job level headcount as of today with site-level breakdowns. Creates/up
 
 ### `generateTerminationsReasonsDrilldown()`
 Generates termination reasons breakdown (Overall, by Site, by ELT). Creates/updates "Terminations Reasons Drilldown" sheet.
-- Supports filtering by Year + Period Type (Halves or Quarters)
+- Supports filtering by Year + specific Period (H1, H2, Q1, Q2, Q3, Q4, or blank for all)
 - Fully clears sheet (data + formatting) when filters are applied to prevent formatting issues
+- Gridlines hidden and columns auto-resized for clean appearance
+
+### `createUserGuide()`
+Creates a user-friendly guide sheet with formatted instructions, icons, and best practices.
+- Includes Quick Start, Available Reports, Filtering Options, and Tips sections
+- Gridlines hidden and formatted with colors and proper spacing
+- Automatically inserted at the beginning of the spreadsheet
 
 ### `getUniqueFilterValues()`
 Extracts unique values for Site, ELT, Department, and Termination Reasons from RawData.
@@ -258,8 +281,10 @@ The script automatically creates/updates these sheets:
 5. **Headcount by Job Level**: Job level headcount with charts
 6. **Terminations Reasons Drilldown**: Termination reasons breakdown (Overall, by Site, by ELT)
 7. **FilterConfig**: Filter selection interface (optional)
+   - Column B formatted with increased width (250px) and center-aligned values
 8. **FilterOptions**: Unique filter values listing (optional, hidden after processing)
 9. **Termination Reason Mapping**: Mapping sheet for cleaning termination reasons (optional, hidden after processing)
+10. **User Guide**: Formatted guide sheet with instructions and best practices (optional)
 
 ## Troubleshooting
 
@@ -291,7 +316,15 @@ Potential improvements:
 
 ## Version History
 
-- **v2.0** (Current): Enhanced reporting with aggregation and improved formatting
+- **v2.1** (Current): User experience improvements and formatting enhancements
+  - Added User Guide sheet with formatted instructions and icons
+  - Enhanced FilterConfig sheet: Column B width increased and center-aligned
+  - Terminations Reasons Drilldown: Gridlines hidden, auto-resize columns
+  - Specific period selection: Can now select H1, H2, Q1, Q2, Q3, or Q4 for Termination Reasons
+  - Improved sheet clearing: Headcount by Site and Headcount by ELT now clear entire sheet contents
+  - All formatting improvements preserve user customizations
+
+- **v2.0**: Enhanced reporting with aggregation and improved formatting
   - Renamed sheets and functions for clarity:
     - Overall Data → All CIQ
     - Headcount Metrics → Headcount by Site
