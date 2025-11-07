@@ -3095,15 +3095,10 @@ function generateTerminationsReasonsDrilldown() {
   
   // Filter info is already placed in rows 1-2 above, so no need to add it here
   
-  if (isNewSheet) {
-    // Auto-resize all columns used (A-C, E-G, I-K)
-    termReasonsSheet.autoResizeColumns(OVERALL_COL_START, 3); // Columns A-C
-    termReasonsSheet.autoResizeColumns(SITE_COL_START, 3);    // Columns E-G
-    termReasonsSheet.autoResizeColumns(ELT_COL_START, 3);     // Columns I-K
-  } else {
-    // On existing sheets, preserve user formatting but ensure columns are visible
-    // Only auto-resize if columns are too narrow (optional - can be removed if you want to preserve all formatting)
-  }
+  // Auto-resize all columns used (A-C, E-G, I-K) for both new and existing sheets
+  termReasonsSheet.autoResizeColumns(OVERALL_COL_START, 3); // Columns A-C
+  termReasonsSheet.autoResizeColumns(SITE_COL_START, 3);    // Columns E-G
+  termReasonsSheet.autoResizeColumns(ELT_COL_START, 3);     // Columns I-K
   
   // Turn off gridlines for the sheet (apply to both new and existing sheets)
   termReasonsSheet.setGridlinesVisible(false);
