@@ -1263,8 +1263,8 @@ function generateHeadcountMetrics() {
             value = metrics.attrition;
             break;
           case 6: // Regrettable %
-            const avgHC = (metrics.openingHC + metrics.closingHC) / 2;
-            value = avgHC > 0 ? (metrics.regrettableTerms / avgHC) : 0;
+            // Use the pre-calculated regrettableTurnover from calculateHRMetrics
+            value = metrics.regrettableTurnover;
             break;
         }
         // For count metrics (0-4), use blank instead of 0. For percentages (5-6), keep 0
