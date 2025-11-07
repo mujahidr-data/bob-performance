@@ -1359,7 +1359,7 @@ function createFilterConfigSheet() {
   configSheet.getRange(16, 1).setFontSize(11);
   
   configSheet.getRange(17, 1).setValue("Year:");
-  configSheet.getRange(18, 1).setValue("Period Type:");
+  configSheet.getRange(18, 1).setValue("Period:");
   
   // Year dropdown for Termination Reasons
   const termYearRule = SpreadsheetApp.newDataValidation()
@@ -1370,17 +1370,17 @@ function createFilterConfigSheet() {
   configSheet.getRange(17, 3).setFontStyle("italic");
   configSheet.getRange(17, 3).setFontColor("#666666");
   
-  // Period Type dropdown: Halves or Quarters
-  const periodTypeRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(["", "Halves", "Quarters"], true)
+  // Period dropdown: H1, H2, Q1, Q2, Q3, Q4, or blank for all
+  const periodRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["", "H1", "H2", "Q1", "Q2", "Q3", "Q4"], true)
     .build();
-  configSheet.getRange(18, 2).setDataValidation(periodTypeRule);
-  configSheet.getRange(18, 3).setValue("(Select Halves or Quarters to toggle)");
+  configSheet.getRange(18, 2).setDataValidation(periodRule);
+  configSheet.getRange(18, 3).setValue("(Select specific period: H1/H2 or Q1-Q4, or leave blank for all)");
   configSheet.getRange(18, 3).setFontStyle("italic");
   configSheet.getRange(18, 3).setFontColor("#666666");
   
-  configSheet.getRange(20, 1).setValue("6. For Terminations Reasons Drilldown: Select Year + Period Type (Halves or Quarters)");
-  configSheet.getRange(21, 1).setValue("7. Period Type toggles between H1/H2 (Halves) or Q1-Q4 (Quarters)");
+  configSheet.getRange(20, 1).setValue("6. For Terminations Reasons Drilldown: Select Year + Period (H1, H2, Q1, Q2, Q3, or Q4)");
+  configSheet.getRange(21, 1).setValue("7. Leave Period blank to show all periods for the selected year");
   
   configSheet.autoResizeColumns(1, 3);
   
@@ -2786,18 +2786,23 @@ function generateTerminationsReasonsDrilldown() {
   if (filterConfigSheet) {
     // Use Termination Reasons filter section (rows 17-18)
     const termYearFilter = filterConfigSheet.getRange(17, 2).getValue(); // Year filter for Termination Reasons
-    const periodTypeFilter = filterConfigSheet.getRange(18, 2).getValue(); // Period Type: Halves or Quarters
+    const periodFilter = filterConfigSheet.getRange(18, 2).getValue(); // Period: H1, H2, Q1, Q2, Q3, Q4, or blank
     
     if (termYearFilter) {
       const year = parseInt(termYearFilter, 10);
-      if (periodTypeFilter === "Halves") {
-        // Year + Halves: filter by both H1 and H2 (show both)
-        timePeriodFilter = { type: 'year_halves', value: year };
-        needsFullClear = true; // Need to fully clear when Halves filter is used
-      } else if (periodTypeFilter === "Quarters") {
-        // Year + Quarters: filter by all quarters (show Q1-Q4)
-        timePeriodFilter = { type: 'year_quarters', value: year };
-        needsFullClear = true; // Need to fully clear when Quarters filter is used
+      if (periodFilter) {
+        // Specific period selected
+        if (periodFilter === "H1" || periodFilter === "H2") {
+          // Specific half selected
+          const halfValue = periodFilter === "H1" ? 1 : 2;
+          timePeriodFilter = { type: 'year_half', value: year, half: halfValue };
+          needsFullClear = true;
+        } else if (periodFilter.startsWith("Q")) {
+          // Specific quarter selected
+          const quarterValue = parseInt(periodFilter.substring(1), 10);
+          timePeriodFilter = { type: 'year_quarter', value: year, quarter: quarterValue };
+          needsFullClear = true;
+        }
       } else {
         // Year only: show all months in year
         timePeriodFilter = { type: 'year', value: year };
@@ -2842,6 +2847,12 @@ function generateTerminationsReasonsDrilldown() {
     
     if (timePeriodFilter.type === 'year') {
       return termYear === timePeriodFilter.value;
+    } else if (timePeriodFilter.type === 'year_half') {
+      // Year + specific half (H1 or H2)
+      return termYear === timePeriodFilter.value && termHalf === timePeriodFilter.half;
+    } else if (timePeriodFilter.type === 'year_quarter') {
+      // Year + specific quarter (Q1, Q2, Q3, or Q4)
+      return termYear === timePeriodFilter.value && termQuarter === timePeriodFilter.quarter;
     } else if (timePeriodFilter.type === 'year_halves') {
       // Year + Halves: include all months in the year (both H1 and H2)
       return termYear === timePeriodFilter.value;
@@ -2928,6 +2939,11 @@ function generateTerminationsReasonsDrilldown() {
     const filterInfo = ["Filters Applied:"];
     if (timePeriodFilter.type === 'year') {
       filterInfo.push(`Year: ${timePeriodFilter.value}`);
+    } else if (timePeriodFilter.type === 'year_half') {
+      const halfLabel = timePeriodFilter.half === 1 ? 'H1' : 'H2';
+      filterInfo.push(`Year: ${timePeriodFilter.value}, Period: ${halfLabel}`);
+    } else if (timePeriodFilter.type === 'year_quarter') {
+      filterInfo.push(`Year: ${timePeriodFilter.value}, Period: Q${timePeriodFilter.quarter}`);
     } else if (timePeriodFilter.type === 'year_halves') {
       filterInfo.push(`Year: ${timePeriodFilter.value}, Period Type: Halves (H1/H2)`);
     } else if (timePeriodFilter.type === 'year_quarters') {
