@@ -1973,52 +1973,68 @@ function generateJobLevelHeadcount() {
     const eltChartRange = jobLevelSheet.getRange(eltBreakdownStartRow, 1, eltBreakdownRows.length + 1, eltChartNumCols);
     
     // Find existing charts by title and/or range
-    existingCharts.forEach(chart => {
+    // We'll check all charts and try multiple identification methods
+    Logger.log(`Checking ${existingCharts.length} existing charts for matches...`);
+    
+    existingCharts.forEach((chart, index) => {
       try {
         const options = chart.getOptions();
         const title = options ? options.title : null;
         
-        // Try to identify by title first
-        if (title === 'Job Level Headcount (Overall)') {
-          overallChart = chart;
-        } else if (title === 'Job Level Headcount by Site') {
-          siteChart = chart;
-        } else if (title === 'Job Level Headcount by ELT') {
-          eltChart = chart;
-        } else {
-          // If title doesn't match, try to identify by range
-          // Get chart ranges and check if they match expected ranges
-          try {
-            const chartRanges = chart.getRanges();
-            if (chartRanges && chartRanges.length > 0) {
-              const firstRange = chartRanges[0];
-              const rangeA1 = firstRange.getA1Notation();
-              
-              // Check if range matches overall chart (starts at A1, 2 columns)
-              if (firstRange.getRow() === 1 && firstRange.getColumn() === 1 && firstRange.getNumColumns() === 2 && !overallChart) {
-                overallChart = chart;
-                Logger.log(`Found overall chart by range: ${rangeA1}`);
-              }
-              // Check if range matches site chart (starts at siteBreakdownStartRow, siteChartNumCols columns)
-              else if (firstRange.getRow() === siteBreakdownStartRow && firstRange.getColumn() === 1 && firstRange.getNumColumns() === siteChartNumCols && !siteChart) {
-                siteChart = chart;
-                Logger.log(`Found site chart by range: ${rangeA1}`);
-              }
-              // Check if range matches ELT chart (starts at eltBreakdownStartRow, eltChartNumCols columns)
-              else if (firstRange.getRow() === eltBreakdownStartRow && firstRange.getColumn() === 1 && firstRange.getNumColumns() === eltChartNumCols && !eltChart) {
-                eltChart = chart;
-                Logger.log(`Found ELT chart by range: ${rangeA1}`);
-              }
-            }
-          } catch (rangeError) {
-            Logger.log(`Error reading chart ranges: ${rangeError.message}`);
+        // Get chart ranges for range-based matching
+        let chartRanges = null;
+        let firstRange = null;
+        try {
+          chartRanges = chart.getRanges();
+          if (chartRanges && chartRanges.length > 0) {
+            firstRange = chartRanges[0];
+          }
+        } catch (rangeError) {
+          Logger.log(`Error reading chart ${index} ranges: ${rangeError.message}`);
+        }
+        
+        // Try to identify Overall chart
+        if (!overallChart) {
+          const matchesTitle = title && (title.includes('Overall') || title.includes('Job Level Headcount (Overall)'));
+          const matchesRange = firstRange && firstRange.getRow() === 1 && firstRange.getColumn() === 1 && firstRange.getNumColumns() === 2;
+          
+          if (matchesTitle || matchesRange) {
+            overallChart = chart;
+            Logger.log(`Found overall chart (index ${index}) - title: ${title}, range: ${firstRange ? firstRange.getA1Notation() : 'N/A'}`);
+          }
+        }
+        
+        // Try to identify Site chart
+        if (!siteChart) {
+          const matchesTitle = title && title.includes('by Site');
+          const matchesRange = firstRange && firstRange.getRow() === siteBreakdownStartRow && firstRange.getColumn() === 1 && firstRange.getNumColumns() === siteChartNumCols;
+          
+          if (matchesTitle || matchesRange) {
+            siteChart = chart;
+            Logger.log(`Found site chart (index ${index}) - title: ${title}, range: ${firstRange ? firstRange.getA1Notation() : 'N/A'}`);
+          }
+        }
+        
+        // Try to identify ELT chart
+        if (!eltChart) {
+          const matchesTitle = title && title.includes('by ELT');
+          const matchesRange = firstRange && (
+            (firstRange.getRow() === eltBreakdownStartRow && firstRange.getColumn() === 1 && firstRange.getNumColumns() === eltChartNumCols) ||
+            (firstRange.getRow() === filteredHeadersRow && firstRange.getColumn() === 1)
+          );
+          
+          if (matchesTitle || matchesRange) {
+            eltChart = chart;
+            Logger.log(`Found ELT chart (index ${index}) - title: ${title}, range: ${firstRange ? firstRange.getA1Notation() : 'N/A'}`);
           }
         }
       } catch (e) {
         // Skip charts that can't be read
-        Logger.log(`Error reading chart: ${e.message}`);
+        Logger.log(`Error reading chart ${index}: ${e.message}`);
       }
     });
+    
+    Logger.log(`Chart detection results - Overall: ${overallChart ? 'FOUND' : 'NOT FOUND'}, Site: ${siteChart ? 'FOUND' : 'NOT FOUND'}, ELT: ${eltChart ? 'FOUND' : 'NOT FOUND'}`);
     
     // Chart 1: Overall Job Level Headcount (Column Chart)
     if (overallChart) {
@@ -2029,11 +2045,13 @@ function generateJobLevelHeadcount() {
           .addRange(overallChartRange)
           .build();
         jobLevelSheet.updateChart(updatedChart);
+        Logger.log("Overall chart updated (not recreated)");
       } catch (e) {
         Logger.log(`Error updating overall chart: ${e.message}`);
       }
     } else {
-      // Create new chart
+      // Only create new chart if it doesn't exist
+      Logger.log("Overall chart not found, creating new chart");
       const newOverallChart = jobLevelSheet.newChart()
         .setChartType(Charts.ChartType.COLUMN)
         .addRange(overallChartRange)
@@ -2094,6 +2112,7 @@ function generateJobLevelHeadcount() {
       }
     } else {
       // Only create new chart if it doesn't exist
+      Logger.log("ELT chart not found, creating new chart");
       const newELTChart = jobLevelSheet.newChart()
         .setChartType(Charts.ChartType.COLUMN)
         .addRange(filteredChartRange)
@@ -2107,7 +2126,6 @@ function generateJobLevelHeadcount() {
         .setOption('height', 400)
         .build();
       jobLevelSheet.insertChart(newELTChart);
-      Logger.log("ELT chart created (new)");
     }
     
     // Add instruction text
