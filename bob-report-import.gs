@@ -334,18 +334,47 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   }
   
   // Helper function to parse date and normalize to date only (no time)
-  const parseDate = (dateStr) => {
-    if (!dateStr) return null;
+  // Handles various formats: Date objects, strings like "1/1/2024", "2024-01-01", etc.
+  const parseDate = (dateValue) => {
+    if (!dateValue) return null;
+    
     let date;
-    if (dateStr instanceof Date) {
-      date = dateStr;
-    } else {
-      date = new Date(dateStr);
+    
+    // If it's already a Date object
+    if (dateValue instanceof Date) {
+      date = dateValue;
     }
-    // Normalize to date only (set time to midnight)
-    if (date && !isNaN(date.getTime())) {
+    // If it's a number (serial date from Excel/Sheets)
+    else if (typeof dateValue === 'number') {
+      // Google Sheets serial dates start from 1899-12-30
+      const sheetsEpoch = new Date(1899, 11, 30);
+      date = new Date(sheetsEpoch.getTime() + dateValue * 86400000);
+    }
+    // If it's a string, try to parse it
+    else if (typeof dateValue === 'string') {
+      const trimmed = dateValue.trim();
+      // Handle formats like "1/1/2024", "01/01/2024", "2024-01-01"
+      if (trimmed) {
+        date = new Date(trimmed);
+        // If parsing failed, try alternative formats
+        if (isNaN(date.getTime())) {
+          // Try MM/DD/YYYY format explicitly
+          const parts = trimmed.split('/');
+          if (parts.length === 3) {
+            const month = parseInt(parts[0], 10) - 1; // Month is 0-indexed
+            const day = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            date = new Date(year, month, day);
+          }
+        }
+      }
+    }
+    
+    // Normalize to date only (set time to midnight) and validate
+    if (date && !isNaN(date.getTime()) && date instanceof Date) {
       return new Date(date.getFullYear(), date.getMonth(), date.getDate());
     }
+    
     return null;
   };
   
