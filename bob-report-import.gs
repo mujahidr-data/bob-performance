@@ -649,6 +649,9 @@ function generateOverallData() {
   let currentDate = new Date(startDate);
   while (currentDate <= endDate) {
     const periodStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    // Using day 0 gives the last day of the previous month, which automatically handles leap years
+    // e.g., new Date(2024, 2, 0) = Feb 29, 2024 (leap year)
+    //      new Date(2025, 2, 0) = Feb 28, 2025 (non-leap year)
     const periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
     
     // Don't include future months
@@ -890,6 +893,9 @@ function generateHeadcountMetrics() {
   let currentDate = new Date(startDate);
   while (currentDate <= endDate) {
     const periodStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    // Using day 0 gives the last day of the previous month, which automatically handles leap years
+    // e.g., new Date(2024, 2, 0) = Feb 29, 2024 (leap year)
+    //      new Date(2025, 2, 0) = Feb 28, 2025 (non-leap year)
     const periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
     
     if (periodStart <= endDate) {
