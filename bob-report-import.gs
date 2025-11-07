@@ -402,9 +402,11 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     return String(row[COLUMN_INDICES.EMP_NAME] || "").trim();
   };
   
-  // Opening Headcount: Original formula = COUNTIFS(C:C, "<=" & periodStart, O:O, ">=" & periodStart) 
+  // Opening Headcount: Employees who were active at the START of the period
+  // Should NOT include employees who start on the first day of the period
+  // Original formula = COUNTIFS(C:C, "<=" & periodStart, O:O, ">=" & periodStart) 
   //                    + COUNTIFS(C:C, "<=" & periodStart, O:O, "")
-  // Employees who: Started <= periodStart AND (Terminated >= periodStart OR never terminated)
+  // But we need: Started < periodStart (not <=) to exclude same-day starts
   // Count unique employee names (since Emp ID may be missing)
   const openingHCNames = new Set();
   filteredRows.forEach(row => {
@@ -414,8 +416,9 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     const startDate = parseDate(row[COLUMN_INDICES.START_DATE]);
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     
-    // Must have started on or before period start
-    if (!startDate || startDate > periodStartDate) return;
+    // Must have started BEFORE period start (not on the first day)
+    // This ensures Opening HC matches previous month's Closing HC
+    if (!startDate || startDate >= periodStartDate) return;
     
     // Either never terminated (active) OR terminated on/after period start
     const isActive = !termDate || termDate >= periodStartDate;
@@ -678,37 +681,21 @@ function generateOverallData() {
   }
   
   // Calculate and write metrics for each period
-  // Opening HC should match previous month's Closing HC for consistency
   const values = [];
-  let previousClosingHC = null;
-  
   for (let i = 0; i < periods.length; i++) {
     try {
       const metrics = calculateHRMetrics(periods[i].start, periods[i].end, filters);
-      
-      // Use previous month's closing HC as opening HC (except for first month)
-      const openingHC = (i === 0) ? metrics.openingHC : previousClosingHC;
-      
-      // Store closing HC for next iteration
-      previousClosingHC = metrics.closingHC;
-      
-      // Recalculate retention if opening HC was adjusted
-      const retention = openingHC > 0 ? ((openingHC - metrics.terms) / openingHC) : 0;
-      const avgHC = (openingHC + metrics.closingHC) / 2;
-      const attrition = avgHC > 0 ? (metrics.voluntaryTerms / avgHC) : 0;
-      const turnover = avgHC > 0 ? (metrics.terms / avgHC) : 0;
-      
       values.push([
         periods[i].label,
-        openingHC,
+        metrics.openingHC,
         metrics.closingHC,
         metrics.hires,
         metrics.terms,
         metrics.voluntaryTerms,
         metrics.involuntaryTerms,
-        Math.round(attrition * 10000) / 10000,
-        Math.round(retention * 10000) / 10000,
-        Math.round(turnover * 10000) / 10000
+        metrics.attrition,
+        metrics.retention,
+        metrics.turnover
       ]);
     } catch (error) {
       Logger.log(`Error calculating metrics for ${periods[i].label}: ${error.message}`);
@@ -724,8 +711,6 @@ function generateOverallData() {
         "",
         ""
       ]);
-      // Reset previous closing HC on error
-      previousClosingHC = null;
     }
   }
   
