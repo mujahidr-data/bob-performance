@@ -618,9 +618,18 @@ function updateFilterOptions() {
   
   const uniqueValues = getUniqueFilterValues();
   
+  // Write section headers to clarify which filters apply to which page
+  filterSheet.getRange(1, 1).setValue("Filter Options - Available Values");
+  filterSheet.getRange(1, 1).setFontWeight("bold");
+  filterSheet.getRange(1, 1).setFontSize(12);
+  
+  filterSheet.getRange(3, 1).setValue("Filters for 'Overall Data' and 'Headcount Metrics' pages:");
+  filterSheet.getRange(3, 1).setFontWeight("bold");
+  filterSheet.getRange(3, 1).setFontSize(11);
+  
   // Write headers
-  filterSheet.getRange(1, 1, 1, 4).setValues([["Site", "ELT", "Department", "Termination Reason"]]);
-  filterSheet.getRange(1, 1, 1, 4).setFontWeight("bold");
+  filterSheet.getRange(4, 1, 1, 4).setValues([["Site", "ELT", "Department", "Termination Reason"]]);
+  filterSheet.getRange(4, 1, 1, 4).setFontWeight("bold");
   
   // Find max length
   const maxLength = Math.max(
@@ -641,17 +650,20 @@ function updateFilterOptions() {
         uniqueValues.terminationReasons[i] || ""
       ]);
     }
-    filterSheet.getRange(2, 1, maxLength, 4).setValues(values);
+    filterSheet.getRange(5, 1, maxLength, 4).setValues(values);
   }
   
   // Auto-resize columns
   filterSheet.autoResizeColumns(1, 4);
   
   // Add instructions
-  filterSheet.getRange(maxLength + 3, 1).setValue("Instructions:");
-  filterSheet.getRange(maxLength + 4, 1).setValue("1. Review the unique values above");
-  filterSheet.getRange(maxLength + 5, 1).setValue("2. Use generateOverallData() function with filters parameter");
-  filterSheet.getRange(maxLength + 6, 1).setValue("3. Example: generateOverallData(new Date('2024-01-01'), new Date('2024-01-31'), {site: 'India'})");
+  const instructionRow = maxLength + 6;
+  filterSheet.getRange(instructionRow, 1).setValue("Instructions:");
+  filterSheet.getRange(instructionRow, 1).setFontWeight("bold");
+  filterSheet.getRange(instructionRow + 1, 1).setValue("1. Review the unique values above");
+  filterSheet.getRange(instructionRow + 2, 1).setValue("2. Use these values in FilterConfig sheet to filter data");
+  filterSheet.getRange(instructionRow + 3, 1).setValue("3. Site, ELT, Department filters apply to: Overall Data, Headcount Metrics");
+  filterSheet.getRange(instructionRow + 4, 1).setValue("4. Termination Reason filter applies to: Termination Reasons Table");
   
   SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.sites.length} sites, ${uniqueValues.elts.length} ELTs, ${uniqueValues.departments.length} departments, ${uniqueValues.terminationReasons.length} termination reasons.`);
 }
@@ -865,45 +877,95 @@ function createFilterConfigSheet() {
   // Get unique values for data validation
   const uniqueValues = getUniqueFilterValues();
   
-  // Write headers and labels
-  configSheet.getRange(1, 1, 1, 2).setValues([["Filter", "Value"]]);
-  configSheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+  // Write section headers
+  configSheet.getRange(1, 1).setValue("Filter Configuration");
+  configSheet.getRange(1, 1).setFontWeight("bold");
+  configSheet.getRange(1, 1).setFontSize(12);
   
-  configSheet.getRange(2, 1).setValue("Site:");
-  configSheet.getRange(3, 1).setValue("ELT:");
-  configSheet.getRange(4, 1).setValue("Department:");
+  configSheet.getRange(3, 1).setValue("Filters for 'Overall Data' and 'Headcount Metrics':");
+  configSheet.getRange(3, 1).setFontWeight("bold");
+  configSheet.getRange(3, 1).setFontSize(11);
+  
+  // Write headers and labels
+  configSheet.getRange(4, 1, 1, 2).setValues([["Filter", "Value"]]);
+  configSheet.getRange(4, 1, 1, 2).setFontWeight("bold");
+  
+  configSheet.getRange(5, 1).setValue("Site:");
+  configSheet.getRange(6, 1).setValue("ELT:");
+  configSheet.getRange(7, 1).setValue("Department:");
   
   // Add data validation dropdowns
   if (uniqueValues.sites.length > 0) {
     const siteRule = SpreadsheetApp.newDataValidation()
       .requireValueInList([""].concat(uniqueValues.sites), true)
       .build();
-    configSheet.getRange(2, 2).setDataValidation(siteRule);
+    configSheet.getRange(5, 2).setDataValidation(siteRule);
   }
   
   if (uniqueValues.elts.length > 0) {
     const eltRule = SpreadsheetApp.newDataValidation()
       .requireValueInList([""].concat(uniqueValues.elts), true)
       .build();
-    configSheet.getRange(3, 2).setDataValidation(eltRule);
+    configSheet.getRange(6, 2).setDataValidation(eltRule);
   }
   
   if (uniqueValues.departments.length > 0) {
     const deptRule = SpreadsheetApp.newDataValidation()
       .requireValueInList([""].concat(uniqueValues.departments), true)
       .build();
-    configSheet.getRange(4, 2).setDataValidation(deptRule);
+    configSheet.getRange(7, 2).setDataValidation(deptRule);
   }
   
+  // Time Period Filters for Headcount Metrics
+  configSheet.getRange(9, 1).setValue("Time Period Filter (for 'Headcount Metrics' only):");
+  configSheet.getRange(9, 1).setFontWeight("bold");
+  configSheet.getRange(9, 1).setFontSize(11);
+  
+  configSheet.getRange(10, 1).setValue("Filter Type:");
+  configSheet.getRange(11, 1).setValue("Year:");
+  configSheet.getRange(12, 1).setValue("Quarter:");
+  configSheet.getRange(13, 1).setValue("Month-Year (comma-separated):");
+  
+  // Year dropdown (2024, 2025, etc.)
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let y = 2024; y <= currentYear; y++) {
+    years.push(String(y));
+  }
+  const yearRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([""].concat(years), true)
+    .build();
+  configSheet.getRange(11, 2).setDataValidation(yearRule);
+  configSheet.getRange(11, 3).setValue("(e.g., 2024 or 2025)");
+  configSheet.getRange(11, 3).setFontStyle("italic");
+  configSheet.getRange(11, 3).setFontColor("#666666");
+  
+  // Quarter dropdown
+  const quarterRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["", "Q1", "Q2", "Q3", "Q4"], true)
+    .build();
+  configSheet.getRange(12, 2).setDataValidation(quarterRule);
+  configSheet.getRange(12, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
+  configSheet.getRange(12, 3).setFontStyle("italic");
+  configSheet.getRange(12, 3).setFontColor("#666666");
+  
+  // Month-Year (text input for comma-separated values)
+  configSheet.getRange(13, 3).setValue("(e.g., Jan 2024, Feb 2024, Mar 2024)");
+  configSheet.getRange(13, 3).setFontStyle("italic");
+  configSheet.getRange(13, 3).setFontColor("#666666");
+  
   // Add instructions
-  configSheet.getRange(6, 1).setValue("Instructions:");
-  configSheet.getRange(7, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
-  configSheet.getRange(8, 1).setValue("2. Run 'Generate Overall Data' from the menu to apply filters");
-  configSheet.getRange(9, 1).setValue("3. Metrics will be calculated based on selected filters");
+  configSheet.getRange(15, 1).setValue("Instructions:");
+  configSheet.getRange(15, 1).setFontWeight("bold");
+  configSheet.getRange(16, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
+  configSheet.getRange(17, 1).setValue("2. For Headcount Metrics: Use Time Period filters to limit date range");
+  configSheet.getRange(18, 1).setValue("3. Time Period: Select Year OR Quarter OR enter Month-Year (comma-separated)");
+  configSheet.getRange(19, 1).setValue("4. Run 'Generate Overall Data' or 'Generate Headcount Metrics' from menu");
+  configSheet.getRange(20, 1).setValue("5. Filters apply: Site/ELT/Dept → Overall Data & Headcount Metrics");
   
-  configSheet.autoResizeColumns(1, 2);
+  configSheet.autoResizeColumns(1, 3);
   
-  SpreadsheetApp.getUi().alert("FilterConfig sheet created. Select your filters and run 'Generate Overall Data'.");
+  SpreadsheetApp.getUi().alert("FilterConfig sheet created. Select your filters and run the appropriate generate function.");
 }
 
 /**
@@ -979,7 +1041,8 @@ function generateHeadcountMetrics() {
   }
   
   // Generate periods (monthly from Jan 2024 to current month)
-  const periods = [];
+  // Check for time period filters in FilterConfig
+  let allPeriods = [];
   const startDate = new Date(2024, 0, 1); // Jan 2024
   const endDate = new Date();
   
@@ -992,14 +1055,40 @@ function generateHeadcountMetrics() {
     const periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
     
     if (periodStart <= endDate) {
-      periods.push({
+      allPeriods.push({
         start: periodStart,
         end: periodEnd,
-        label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy")
+        label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy"),
+        year: periodStart.getFullYear(),
+        quarter: Math.floor(periodStart.getMonth() / 3) + 1
       });
     }
     
     currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+  }
+  
+  // Apply time period filters from FilterConfig
+  let periods = allPeriods;
+  const filterConfigSheet = ss.getSheetByName("FilterConfig");
+  if (filterConfigSheet) {
+    const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
+    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    const monthYearFilter = filterConfigSheet.getRange(13, 2).getValue(); // Month-Year filter
+    
+    if (yearFilter) {
+      // Filter by year
+      const filterYear = parseInt(yearFilter, 10);
+      periods = periods.filter(p => p.year === filterYear);
+    } else if (quarterFilter) {
+      // Filter by quarter (Q1, Q2, Q3, Q4)
+      const quarterNum = parseInt(quarterFilter.replace("Q", ""), 10);
+      periods = periods.filter(p => p.quarter === quarterNum);
+    } else if (monthYearFilter) {
+      // Filter by month-year (comma-separated, e.g., "Jan 2024, Feb 2024, Mar 2024")
+      const selectedMonths = monthYearFilter.split(",").map(m => m.trim());
+      periods = periods.filter(p => selectedMonths.includes(p.label));
+    }
+    // If no time period filter, use all periods
   }
   
   // Build table: Site/Metric as rows, Periods as columns
@@ -1027,19 +1116,21 @@ function generateHeadcountMetrics() {
   // Calculate metrics for each site and period
   // Optimize: calculate all metrics once per site/period, then extract what we need
   const dataRows = [];
-  sites.forEach(site => {
+  sites.forEach((site, siteIndex) => {
     // For each site, create rows for each metric
     metricLabels.forEach((metricLabel, metricIndex) => {
       const row = [`${site} - ${metricLabel}`];
       
       periods.forEach(period => {
         try {
-          const metrics = calculateHRMetrics(period.start, period.end, { site: site });
+          // Combine site filter with any other filters from FilterConfig
+          const periodFilters = Object.assign({ site: site }, filters);
+          const metrics = calculateHRMetrics(period.start, period.end, periodFilters);
           
           let value = 0;
           switch(metricIndex) {
-            case 0: // Average Headcount
-              value = (metrics.openingHC + metrics.closingHC) / 2;
+            case 0: // Average Headcount - round to nearest integer
+              value = Math.round((metrics.openingHC + metrics.closingHC) / 2);
               break;
             case 1: // Hires
               value = metrics.hires;
@@ -1061,14 +1152,27 @@ function generateHeadcountMetrics() {
               value = avgHC > 0 ? (metrics.regrettableTerms / avgHC) : 0;
               break;
           }
-          row.push(value);
+          // For count metrics (0-4), use blank instead of 0. For percentages (5-6), keep 0
+          if (metricIndex < 5 && value === 0) {
+            row.push(""); // Blank for zero counts
+          } else {
+            row.push(value);
+          }
         } catch (error) {
           Logger.log(`Error calculating ${metricLabel} for ${site} in ${period.label}: ${error.message}`);
-          row.push(0);
+          // Use blank for counts, 0 for percentages
+          row.push(metricIndex < 5 ? "" : 0);
         }
       });
       dataRows.push(row);
     });
+    
+    // Add 2 blank rows after each site (except the last one)
+    if (siteIndex < sites.length - 1) {
+      const blankRow = [""].concat(new Array(periods.length).fill(""));
+      dataRows.push(blankRow);
+      dataRows.push(blankRow.slice()); // Second blank row
+    }
   });
   
   // Write data in one batch operation
@@ -1079,18 +1183,28 @@ function generateHeadcountMetrics() {
       // Format percentage columns (Attrition % and Regrettable %) - simplified approach
       // Only format if it's a new sheet to avoid overwriting user formatting
       if (isNewSheet) {
-        // Collect all percentage row ranges and format in batch
+        // Calculate row positions accounting for blank rows between sites
         const percentageRanges = [];
+        const regrettableRanges = [];
+        let currentRow = 2; // Data starts at row 2
+        
         sites.forEach((site, siteIndex) => {
-          const baseRow = siteIndex * metricLabels.length + 2; // +2 because data starts at row 2
-          const attritionRow = baseRow + 5; // Attrition % is at index 5
-          const regrettableRow = baseRow + 6; // Regrettable % is at index 6
+          const attritionRow = currentRow + 5; // Attrition % is at index 5
+          const regrettableRow = currentRow + 6; // Regrettable % is at index 6
           
           if (attritionRow <= dataRows.length + 1) {
             percentageRanges.push(headcountSheet.getRange(attritionRow, 2, 1, periods.length));
           }
           if (regrettableRow <= dataRows.length + 1) {
-            percentageRanges.push(headcountSheet.getRange(regrettableRow, 2, 1, periods.length));
+            const range = headcountSheet.getRange(regrettableRow, 2, 1, periods.length);
+            percentageRanges.push(range);
+            regrettableRanges.push(range); // Track for conditional formatting
+          }
+          
+          // Move to next site (7 metrics + 2 blank rows if not last site)
+          currentRow += metricLabels.length;
+          if (siteIndex < sites.length - 1) {
+            currentRow += 2; // Add 2 blank rows
           }
         });
         
@@ -1101,6 +1215,34 @@ function generateHeadcountMetrics() {
               range.setNumberFormat("0.0%");
             } catch (e) {
               Logger.log(`Error formatting range: ${e.message}`);
+            }
+          });
+        }
+        
+        // Add conditional formatting for high regrettable % values
+        if (regrettableRanges.length > 0) {
+          regrettableRanges.forEach(range => {
+            try {
+              // Find the highest value in this range to set threshold
+              const values = range.getValues()[0];
+              const maxValue = Math.max(...values.filter(v => v !== "" && v !== null && !isNaN(v)));
+              
+              // Set threshold at 80% of max value, or 0.05 (5%) if max is lower
+              const threshold = Math.max(maxValue * 0.8, 0.05);
+              
+              // Apply conditional formatting: red background with exclamation icon for high values
+              const rule = SpreadsheetApp.newConditionalFormatRule()
+                .setRanges([range])
+                .whenNumberGreaterThan(threshold)
+                .setBackground("#ffcccc") // Light red
+                .setFontColor("#cc0000") // Dark red text
+                .build();
+              
+              const rules = headcountSheet.getConditionalFormatRules();
+              rules.push(rule);
+              headcountSheet.setConditionalFormatRules(rules);
+            } catch (e) {
+              Logger.log(`Error applying conditional formatting: ${e.message}`);
             }
           });
         }
