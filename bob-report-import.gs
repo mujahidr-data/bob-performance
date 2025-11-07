@@ -647,7 +647,7 @@ function updateFilterOptions() {
   filterSheet.getRange(1, 1).setFontWeight("bold");
   filterSheet.getRange(1, 1).setFontSize(12);
   
-  filterSheet.getRange(3, 1).setValue("Filters for 'Overall Data' and 'Headcount Metrics' pages:");
+  filterSheet.getRange(3, 1).setValue("Filters for 'Headcount Metrics' page (Site, ELT, Department):");
   filterSheet.getRange(3, 1).setFontWeight("bold");
   filterSheet.getRange(3, 1).setFontSize(11);
   
@@ -686,7 +686,7 @@ function updateFilterOptions() {
   filterSheet.getRange(instructionRow, 1).setFontWeight("bold");
   filterSheet.getRange(instructionRow + 1, 1).setValue("1. Review the unique values above");
   filterSheet.getRange(instructionRow + 2, 1).setValue("2. Use these values in FilterConfig sheet to filter data");
-  filterSheet.getRange(instructionRow + 3, 1).setValue("3. Site, ELT, Department filters apply to: Overall Data, Headcount Metrics");
+  filterSheet.getRange(instructionRow + 3, 1).setValue("3. Site, ELT, Department filters apply to: Headcount Metrics only (Overall Data shows entire company)");
   filterSheet.getRange(instructionRow + 4, 1).setValue("4. Termination Reason filter applies to: Termination Reasons Table");
   
   SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.sites.length} sites, ${uniqueValues.elts.length} ELTs, ${uniqueValues.departments.length} departments, ${uniqueValues.terminationReasons.length} termination reasons.`);
@@ -707,28 +707,12 @@ function generateOverallData() {
   // Don't clear content - preserve user formatting
   // We'll just update the values directly
   
-  // Get filter selections from a "FilterConfig" sheet if it exists
-  let filters = {};
+  // Overall Data shows entire company data - only time period filters apply
+  let filters = {}; // No site/ELT/department filters for Overall Data
   let timePeriodFilter = null;
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
-    const siteCell = filterConfigSheet.getRange("B2"); // Row 2 for Site
-    const eltCell = filterConfigSheet.getRange("B3");  // Row 3 for ELT
-    const deptCell = filterConfigSheet.getRange("B4"); // Row 4 for Department
-    
-    const site = siteCell.getValue();
-    const elt = eltCell.getValue();
-    const dept = deptCell.getValue();
-    
-    // Trim and normalize filter values
-    if (site) filters.site = String(site).trim();
-    if (elt) filters.elt = String(elt).trim();
-    if (dept) filters.department = String(dept).trim();
-    
-    // Debug logging
-    Logger.log(`Overall Data - Filters applied: Site="${filters.site || 'none'}", ELT="${filters.elt || 'none'}", Department="${filters.department || 'none'}"`);
-    
-    // Get time period filters (for Overall Data, these also apply)
+    // Get time period filters only (for Overall Data)
     const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
     const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
     const monthYearFilter = filterConfigSheet.getRange(13, 2).getValue(); // Month-Year filter
@@ -884,18 +868,7 @@ function generateOverallData() {
   const filterLabels = [];
   const filterValues = [];
   
-  if (filters.site) {
-    filterLabels.push("Site:");
-    filterValues.push(filters.site);
-  }
-  if (filters.elt) {
-    filterLabels.push("ELT:");
-    filterValues.push(filters.elt);
-  }
-  if (filters.department) {
-    filterLabels.push("Department:");
-    filterValues.push(filters.department);
-  }
+  // Only show time period filter (Overall Data shows entire company)
   if (timePeriodFilter) {
     if (timePeriodFilter.type === 'year') {
       filterLabels.push("Year:");
@@ -1001,7 +974,7 @@ function createFilterConfigSheet() {
   configSheet.getRange(1, 1).setFontWeight("bold");
   configSheet.getRange(1, 1).setFontSize(12);
   
-  configSheet.getRange(3, 1).setValue("Filters for 'Overall Data' and 'Headcount Metrics':");
+  configSheet.getRange(3, 1).setValue("Filters for 'Headcount Metrics' only (Site, ELT, Department):");
   configSheet.getRange(3, 1).setFontWeight("bold");
   configSheet.getRange(3, 1).setFontSize(11);
   
@@ -1035,8 +1008,8 @@ function createFilterConfigSheet() {
     configSheet.getRange(7, 2).setDataValidation(deptRule);
   }
   
-  // Time Period Filters for Headcount Metrics
-  configSheet.getRange(9, 1).setValue("Time Period Filter (for 'Headcount Metrics' only):");
+  // Time Period Filters for Overall Data and Headcount Metrics
+  configSheet.getRange(9, 1).setValue("Time Period Filter (for 'Overall Data' and 'Headcount Metrics'):");
   configSheet.getRange(9, 1).setFontWeight("bold");
   configSheet.getRange(9, 1).setFontSize(11);
   
@@ -1045,10 +1018,11 @@ function createFilterConfigSheet() {
   configSheet.getRange(12, 1).setValue("Quarter:");
   configSheet.getRange(13, 1).setValue("Month-Year (comma-separated):");
   
-  // Year dropdown (2024, 2025, etc.)
+  // Year dropdown (2024, 2025, 2026, etc.)
   const currentYear = new Date().getFullYear();
   const years = [];
-  for (let y = 2024; y <= currentYear; y++) {
+  // Include current year and next year (since we're in November, include 2026)
+  for (let y = 2024; y <= Math.max(currentYear, 2026); y++) {
     years.push(String(y));
   }
   const yearRule = SpreadsheetApp.newDataValidation()
@@ -1077,10 +1051,10 @@ function createFilterConfigSheet() {
   configSheet.getRange(15, 1).setValue("Instructions:");
   configSheet.getRange(15, 1).setFontWeight("bold");
   configSheet.getRange(16, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
-  configSheet.getRange(17, 1).setValue("2. For Headcount Metrics: Use Time Period filters to limit date range");
+  configSheet.getRange(17, 1).setValue("2. For Overall Data & Headcount Metrics: Use Time Period filters to limit date range");
   configSheet.getRange(18, 1).setValue("3. Time Period: Select Year OR Quarter OR enter Month-Year (comma-separated)");
   configSheet.getRange(19, 1).setValue("4. Run 'Generate Overall Data' or 'Generate Headcount Metrics' from menu");
-  configSheet.getRange(20, 1).setValue("5. Filters apply: Site/ELT/Dept → Overall Data & Headcount Metrics");
+  configSheet.getRange(20, 1).setValue("5. Filters apply: Site/ELT/Dept → Headcount Metrics only; Time Period → Overall Data & Headcount Metrics");
   
   configSheet.autoResizeColumns(1, 3);
   
@@ -1228,11 +1202,14 @@ function generateHeadcountMetrics() {
   
   // Define metrics to calculate for each site
   const metricLabels = [
+    "Opening HC",
+    "Closing HC",
     "Average Headcount",
     "Hires",
     "Terminations",
     "Regrettable Terms",
     "Non-Regrettable Terms",
+    "Retention %",
     "Turnover %",
     "Regrettable %"
   ];
@@ -1276,38 +1253,48 @@ function generateHeadcountMetrics() {
         
         if (!metrics) {
           // Use blank for counts, 0 for percentages
-          row.push(metricIndex < 5 ? "" : 0);
+          row.push(metricIndex < 7 ? "" : 0);
           return;
         }
         
         let value = 0;
         switch(metricIndex) {
-          case 0: // Average Headcount - round to nearest integer
+          case 0: // Opening HC
+            value = metrics.openingHC;
+            break;
+          case 1: // Closing HC
+            value = metrics.closingHC;
+            break;
+          case 2: // Average Headcount - round to nearest integer
             value = Math.round((metrics.openingHC + metrics.closingHC) / 2);
             break;
-          case 1: // Hires
+          case 3: // Hires
             value = metrics.hires;
             break;
-          case 2: // Terminations
+          case 4: // Terminations
             value = metrics.terms;
             break;
-          case 3: // Regrettable Terms
+          case 5: // Regrettable Terms
             value = metrics.regrettableTerms;
             break;
-          case 4: // Non-Regrettable Terms
+          case 6: // Non-Regrettable Terms
             value = metrics.terms - metrics.regrettableTerms;
             break;
-          case 5: // Turnover %
+          case 7: // Retention %
+            // Use the pre-calculated retention from calculateHRMetrics
+            value = metrics.retention;
+            break;
+          case 8: // Turnover %
             // Use the pre-calculated turnover from calculateHRMetrics (Total Terms / Avg HC)
             value = metrics.turnover;
             break;
-          case 6: // Regrettable %
+          case 9: // Regrettable %
             // Use the pre-calculated regrettableTurnover from calculateHRMetrics (Regrettable Terms / Avg HC)
             value = metrics.regrettableTurnover;
             break;
         }
-        // For count metrics (0-4), use blank instead of 0. For percentages (5-6), keep 0
-        if (metricIndex < 5 && value === 0) {
+        // For count metrics (0-6), use blank instead of 0. For percentages (7-9), keep 0
+        if (metricIndex < 7 && value === 0) {
           row.push(""); // Blank for zero counts
         } else {
           row.push(value);
