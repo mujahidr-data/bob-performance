@@ -678,21 +678,37 @@ function generateOverallData() {
   }
   
   // Calculate and write metrics for each period
+  // Opening HC should match previous month's Closing HC for consistency
   const values = [];
+  let previousClosingHC = null;
+  
   for (let i = 0; i < periods.length; i++) {
     try {
       const metrics = calculateHRMetrics(periods[i].start, periods[i].end, filters);
+      
+      // Use previous month's closing HC as opening HC (except for first month)
+      const openingHC = (i === 0) ? metrics.openingHC : previousClosingHC;
+      
+      // Store closing HC for next iteration
+      previousClosingHC = metrics.closingHC;
+      
+      // Recalculate retention if opening HC was adjusted
+      const retention = openingHC > 0 ? ((openingHC - metrics.terms) / openingHC) : 0;
+      const avgHC = (openingHC + metrics.closingHC) / 2;
+      const attrition = avgHC > 0 ? (metrics.voluntaryTerms / avgHC) : 0;
+      const turnover = avgHC > 0 ? (metrics.terms / avgHC) : 0;
+      
       values.push([
         periods[i].label,
-        metrics.openingHC,
+        openingHC,
         metrics.closingHC,
         metrics.hires,
         metrics.terms,
         metrics.voluntaryTerms,
         metrics.involuntaryTerms,
-        metrics.attrition,
-        metrics.retention,
-        metrics.turnover
+        Math.round(attrition * 10000) / 10000,
+        Math.round(retention * 10000) / 10000,
+        Math.round(turnover * 10000) / 10000
       ]);
     } catch (error) {
       Logger.log(`Error calculating metrics for ${periods[i].label}: ${error.message}`);
@@ -708,6 +724,8 @@ function generateOverallData() {
         "",
         ""
       ]);
+      // Reset previous closing HC on error
+      previousClosingHC = null;
     }
   }
   
