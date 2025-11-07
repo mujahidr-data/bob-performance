@@ -41,6 +41,9 @@ function fetchBobReportCSV() {
   
   // Reassign ELT values based on business rules
   reassignELTValues();
+  
+  // Fix department name typos
+  fixDepartmentTypos();
 }
 
 /**
@@ -54,6 +57,7 @@ function onOpen() {
     .addItem('Step 1: Fetch Bob Report', 'fetchBobReportCSV')
     // Step 2: Process/clean data
     .addItem('Step 2: Reassign ELT Values', 'reassignELTValues')
+    .addItem('Fix Department Typos', 'fixDepartmentTypos')
     // Step 3: Review available filters
     .addItem('Step 3: Update Filter Options', 'updateFilterOptions')
     // Step 4: Set up filter selection
@@ -219,6 +223,75 @@ function reassignELTValues() {
     }
     
     SpreadsheetApp.getUi().alert(debugMsg);
+  }
+}
+
+/**
+ * Fixes department name typos in the RawData sheet
+ * Currently fixes: "Customer Sucess" → "Customer Success"
+ */
+function fixDepartmentTypos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rawDataSheet = ss.getSheetByName("RawData");
+  
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  const data = rawDataSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    SpreadsheetApp.getUi().alert("No data found in RawData sheet.");
+    return;
+  }
+  
+  const header = data[0];
+  const rows = data.slice(1);
+  let fixCount = 0;
+  const fixes = [];
+  
+  // Department typo corrections (case-insensitive)
+  const departmentFixes = {
+    "customer sucess": "Customer Success"  // Fix typo: missing 'c'
+  };
+  
+  // Process each row (skip header)
+  rows.forEach((row, index) => {
+    let department = row[COLUMN_INDICES.DEPARTMENT];
+    if (department instanceof Date) {
+      department = Utilities.formatDate(department, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    }
+    const originalDept = String(department || "").trim();
+    const deptLower = originalDept.toLowerCase();
+    
+    // Check if this department needs fixing
+    if (departmentFixes.hasOwnProperty(deptLower)) {
+      const correctedDept = departmentFixes[deptLower];
+      row[COLUMN_INDICES.DEPARTMENT] = correctedDept;
+      fixCount++;
+      fixes.push({
+        row: index + 2, // +2 because: +1 for header, +1 for 0-index
+        oldDept: originalDept,
+        newDept: correctedDept
+      });
+    }
+  });
+  
+  // Write updated data back to sheet
+  if (fixCount > 0) {
+    const updatedData = [header, ...rows];
+    const targetRange = rawDataSheet.getRange(1, 1, updatedData.length, updatedData[0].length);
+    targetRange.setValues(updatedData);
+    
+    // Log fixes
+    Logger.log(`Department typo fixes completed: ${fixCount} rows updated`);
+    fixes.forEach(f => {
+      Logger.log(`Row ${f.row}: "${f.oldDept}" → "${f.newDept}"`);
+    });
+    
+    SpreadsheetApp.getUi().alert(`Department typos fixed.\n${fixCount} rows updated.`);
+  } else {
+    SpreadsheetApp.getUi().alert("No department typos found. All department names are correct.");
   }
 }
 
