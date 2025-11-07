@@ -809,35 +809,52 @@ function generateOverallData() {
     infoRow += filterInfo.length + 1;
   }
   
-  // Add formula descriptions in Column T (index 20, 0-based: 19)
-  const descriptions = [
-    ["Formula Descriptions:"],
-    [""],
-    ["Attrition %:"],
-    ["Voluntary Terms / Average Headcount"],
-    ["Where Average Headcount = (Opening HC + Closing HC) / 2"],
-    [""],
-    ["Retention %:"],
-    ["(Opening Headcount - Total Terms) / Opening Headcount"],
-    [""],
-    ["Turnover %:"],
-    ["Total Terms / Average Headcount"],
-    ["Where Average Headcount = (Opening HC + Closing HC) / 2"],
-    [""],
-    ["Regrettable Turnover %:"],
-    ["Regrettable Terms / Average Headcount"],
-    ["Where Average Headcount = (Opening HC + Closing HC) / 2"]
-  ];
+  // Add formula descriptions in Column T (index 20) only if they don't already exist
+  // Check if "Formula Descriptions:" already exists in Column T
+  const lastRowInSheet = metricsSheet.getLastRow();
+  let descriptionsExist = false;
   
-  // Column T is index 20 (1-based), so 0-based index is 19
-  metricsSheet.getRange(infoRow, 20, descriptions.length, 1).setValues(descriptions);
+  if (lastRowInSheet >= infoRow) {
+    // Check a few rows starting from infoRow to see if descriptions exist
+    for (let checkRow = infoRow; checkRow <= Math.min(infoRow + 5, lastRowInSheet); checkRow++) {
+      const cellValue = metricsSheet.getRange(checkRow, 20).getValue();
+      if (cellValue && String(cellValue).trim() === "Formula Descriptions:") {
+        descriptionsExist = true;
+        break;
+      }
+    }
+  }
   
-  // Format the description section
-  if (isNewSheet) {
-    const descRange = metricsSheet.getRange(infoRow, 20, 1, 1);
-    descRange.setFontWeight("bold");
-    // Make column T wider for readability
-    metricsSheet.setColumnWidth(20, 400);
+  if (!descriptionsExist) {
+    const descriptions = [
+      ["Formula Descriptions:"],
+      [""],
+      ["Attrition %:"],
+      ["Voluntary Terms / Average Headcount"],
+      ["Where Average Headcount = (Opening HC + Closing HC) / 2"],
+      [""],
+      ["Retention %:"],
+      ["(Opening Headcount - Total Terms) / Opening Headcount"],
+      [""],
+      ["Turnover %:"],
+      ["Total Terms / Average Headcount"],
+      ["Where Average Headcount = (Opening HC + Closing HC) / 2"],
+      [""],
+      ["Regrettable Turnover %:"],
+      ["Regrettable Terms / Average Headcount"],
+      ["Where Average Headcount = (Opening HC + Closing HC) / 2"]
+    ];
+    
+    // Column T is index 20 (1-based)
+    metricsSheet.getRange(infoRow, 20, descriptions.length, 1).setValues(descriptions);
+    
+    // Format the description section
+    if (isNewSheet) {
+      const descRange = metricsSheet.getRange(infoRow, 20, 1, 1);
+      descRange.setFontWeight("bold");
+      // Make column T wider for readability
+      metricsSheet.setColumnWidth(20, 400);
+    }
   }
   
   SpreadsheetApp.getUi().alert(`Overall Data generated for ${periods.length} periods.`);
