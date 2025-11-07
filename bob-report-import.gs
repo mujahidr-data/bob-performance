@@ -87,6 +87,7 @@ const COLUMN_INDICES = {
   START_DATE: 2,           // Column C (0-indexed: 2) - Start Date in YYYY-MM-DD format
   TERMINATION_DATE: 17,    // Column R (0-indexed: 17) - Termination date (blank for active employees)
   LEAVE_TERMINATION_TYPE: 19, // Column T (0-indexed: 19) - Leave and termination type
+  TERMINATION_CATEGORY: 20, // Column U (0-indexed: 20) - Termination Category (Regretted/Unregretted)
   TERMINATION_REASON: 18,   // Column S (0-indexed: 18) - Reason for termination
   JOB_LEVEL: 4,            // Column E (0-indexed: 4) - Job Level
   DEPARTMENT: 6,           // Column G (0-indexed: 6)
@@ -530,6 +531,48 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   });
   const involuntaryTerms = involuntaryTermNames.size;
   
+  // Regrettable Terms: Count terminations that are regrettable
+  // Logic: Use Column U (Termination Category) if available, otherwise use Column T (Leave/Termination Type)
+  // - Column U = "Regretted" → Regrettable
+  // - Column U = "Unregretted" → Not Regrettable
+  // - Column U is blank:
+  //   - Column T = "Voluntary - Regrettable" → Regrettable
+  //   - Column T = "Involuntary" → Not Regrettable (always)
+  //   - Column T = "Voluntary - Non regrettable" → Not Regrettable
+  // Count unique employee names
+  const regrettableTermNames = new Set();
+  filteredRows.forEach(row => {
+    const empName = getEmpName(row);
+    if (!empName) return; // Skip rows without employee name
+    
+    const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
+    if (!termDate) return;
+    if (termDate < periodStartDate || termDate > periodEndDate) return;
+    
+    const termCategory = String(row[COLUMN_INDICES.TERMINATION_CATEGORY] || "").trim();
+    const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
+    
+    let isRegrettable = false;
+    
+    if (termCategory) {
+      // Use Column U value if available
+      isRegrettable = termCategory === "Regretted" || termCategory.toLowerCase() === "regretted";
+    } else {
+      // Fallback to Column T logic if Column U is blank
+      if (termType === "Voluntary - Regrettable") {
+        isRegrettable = true;
+      } else if (termType === "Involuntary" || termType === "Involuntary - Regrettable" || 
+                 termType === "Voluntary - Non regrettable" || termType === "End of Contract") {
+        isRegrettable = false; // Always non-regrettable
+      }
+    }
+    
+    if (isRegrettable) {
+      regrettableTermNames.add(empName);
+    }
+  });
+  const regrettableTerms = regrettableTermNames.size;
+  
   // Calculate rates (return as decimals, sheet will format as percentage)
   // Original formulas:
   // - attrition = F4 / ((B4 + C4) / 2) where F4 = Voluntary Terms
@@ -547,6 +590,7 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     terms,
     voluntaryTerms,
     involuntaryTerms,
+    regrettableTerms,
     // Round to 4 decimal places for accurate percentage display (0.9680 = 96.80%)
     attrition: Math.round(attrition * 10000) / 10000,
     retention: Math.round(retention * 10000) / 10000,
@@ -675,6 +719,7 @@ function generateOverallData() {
     "Terms",
     "Voluntary",
     "Involuntary",
+    "Regrettable",
     "Attrition %",
     "Retention %",
     "Turnover %"
@@ -707,6 +752,7 @@ function generateOverallData() {
       Logger.log(`Error calculating metrics for ${periods[i].label}: ${error.message}`);
       values.push([
         periods[i].label,
+        "",
         "",
         "",
         "",
