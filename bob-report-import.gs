@@ -68,13 +68,13 @@ function onOpen() {
     .addItem('Step 4: Create Filter Config Sheet', 'createFilterConfigSheet')
     .addSeparator()
     // Step 5: Generate metrics
-    .addItem('Step 5: Generate Overall Data', 'generateOverallData')
+    .addItem('Step 5: Generate All CIQ', 'generateAllCIQ')
     .addSeparator()
     // Additional reports
-    .addItem('Generate Headcount Metrics', 'generateHeadcountMetrics')
-    .addItem('Generate ELT Metrics', 'generateELTMetrics')
-    .addItem('Generate Job Level Headcount', 'generateJobLevelHeadcount')
-    .addItem('Generate Termination Reasons Table', 'generateTerminationReasonsTable')
+    .addItem('Generate Headcount by Site', 'generateHeadcountBySite')
+    .addItem('Generate Headcount by ELT', 'generateHeadcountByELT')
+    .addItem('Generate Headcount by Job Level', 'generateHeadcountByJobLevel')
+    .addItem('Generate Terminations Reasons Drilldown', 'generateTerminationsReasonsDrilldown')
     .addToUi();
 }
 
@@ -86,8 +86,8 @@ function onEdit(e) {
   const sheet = e.source.getActiveSheet();
   const range = e.range;
   
-  // Check if the edit is in the "Job Level Headcount" sheet
-  if (sheet.getName() !== "Job Level Headcount") {
+  // Check if the edit is in the "Headcount by Job Level" sheet
+  if (sheet.getName() !== "Headcount by Job Level") {
     return;
   }
   
@@ -132,7 +132,7 @@ function updateELTChart(jobLevelSheet, eltFilterRow) {
       try {
         const options = chart.getOptions();
         const title = options ? options.title : null;
-        if (title && title.includes('Job Level Headcount by ELT')) {
+        if (title && title.includes('Headcount by Job Level by ELT')) {
           eltChart = chart;
         }
       } catch (e) {
@@ -880,33 +880,33 @@ function updateFilterOptions() {
   filterSheet.getRange(instructionRow, 1).setFontWeight("bold");
   filterSheet.getRange(instructionRow + 1, 1).setValue("1. Review the unique values above for reference");
   filterSheet.getRange(instructionRow + 2, 1).setValue("2. Time Period filters are configured in FilterConfig sheet");
-  filterSheet.getRange(instructionRow + 3, 1).setValue("3. Time Period filter applies to: Overall Data, Headcount Metrics & ELT Metrics");
+  filterSheet.getRange(instructionRow + 3, 1).setValue("3. Time Period filter applies to: All CIQ, Headcount by Site & Headcount by ELT");
   
   SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.sites.length} sites, ${uniqueValues.elts.length} ELTs, ${uniqueValues.departments.length} departments, ${uniqueValues.terminationReasons.length} termination reasons.`);
 }
 
 /**
- * Generates overall HR metrics for multiple periods and writes to "Overall Data" sheet
+ * Generates overall HR metrics for multiple periods and writes to "All CIQ" sheet
  * Creates a comprehensive metrics table with all calculated values
  */
-function generateOverallData() {
+function generateAllCIQ() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let metricsSheet = ss.getSheetByName("Overall Data");
+  let metricsSheet = ss.getSheetByName("All CIQ");
   const isNewSheet = !metricsSheet;
   
   if (!metricsSheet) {
-    metricsSheet = ss.insertSheet("Overall Data");
+    metricsSheet = ss.insertSheet("All CIQ");
   }
   // Don't clear content - preserve user formatting
   // We'll just update the values directly
   
-  // Overall Data shows entire company data - only time period filters apply
-  let filters = {}; // No site/ELT/department filters for Overall Data
+  // All CIQ shows entire company data - only time period filters apply
+  let filters = {}; // No site/ELT/department filters for All CIQ
   let timePeriodFilter = null;
   let aggregationType = null; // 'halves' or 'quarters' when Year + Halves/Quarters selected
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
-    // Get time period filters only (for Overall Data)
+    // Get time period filters only (for All CIQ)
     const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
     const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
     const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarters filter
@@ -1150,6 +1150,16 @@ function generateOverallData() {
     }
   }
   
+  // If aggregation is used (Quarter/Halves), clear existing data but preserve formatting
+  if (aggregationType && !isNewSheet) {
+    // Clear data rows but preserve formatting
+    const existingLastRow = metricsSheet.getLastRow();
+    if (existingLastRow > 1) {
+      // Clear content from row 2 onwards (preserve header row formatting)
+      metricsSheet.getRange(2, 1, existingLastRow - 1, headers.length).clearContent();
+    }
+  }
+  
   if (values.length > 0) {
     // Update data values (preserves existing formatting for existing rows)
     metricsSheet.getRange(2, 1, values.length, headers.length).setValues(values);
@@ -1179,7 +1189,7 @@ function generateOverallData() {
   const filterLabels = [];
   const filterValues = [];
   
-  // Only show time period filter (Overall Data shows entire company)
+  // Only show time period filter (All CIQ shows entire company)
   if (timePeriodFilter) {
     if (timePeriodFilter.type === 'year') {
       filterLabels.push("Year:");
@@ -1260,12 +1270,15 @@ function generateOverallData() {
     }
   }
   
-  SpreadsheetApp.getUi().alert(`Overall Data generated for ${periods.length} periods.`);
+  SpreadsheetApp.getUi().alert(`All CIQ generated for ${periods.length} periods.`);
+  
+  // Hide RawData, FilterOptions, and Termination Reason Mapping sheets after processing
+  hideProcessingSheets(ss);
 }
 
 /**
  * Creates a FilterConfig sheet for easy filter selection
- * Users can enter filter values in this sheet, then run generateOverallData()
+ * Users can enter filter values in this sheet, then run generateAllCIQ()
  */
 function createFilterConfigSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1285,8 +1298,8 @@ function createFilterConfigSheet() {
   configSheet.getRange(1, 1).setFontWeight("bold");
   configSheet.getRange(1, 1).setFontSize(12);
   
-  // Time Period Filters for Overall Data, Headcount Metrics, and ELT Metrics
-  configSheet.getRange(3, 1).setValue("Time Period Filter (for 'Overall Data', 'Headcount Metrics', and 'ELT Metrics'):");
+  // Time Period Filters for All CIQ, Headcount by Site, and Headcount by ELT
+  configSheet.getRange(3, 1).setValue("Time Period Filter (for 'All CIQ', 'Headcount by Site', and 'Headcount by ELT'):");
   configSheet.getRange(3, 1).setFontWeight("bold");
   configSheet.getRange(3, 1).setFontSize(11);
   
@@ -1335,13 +1348,13 @@ function createFilterConfigSheet() {
   configSheet.getRange(9, 1).setValue("Instructions:");
   configSheet.getRange(9, 1).setFontWeight("bold");
   configSheet.getRange(10, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
-  configSheet.getRange(11, 1).setValue("2. Time Period filter applies to: Overall Data, Headcount Metrics & ELT Metrics");
+  configSheet.getRange(11, 1).setValue("2. Time Period filter applies to: All CIQ, Headcount by Site & Headcount by ELT");
   configSheet.getRange(12, 1).setValue("3. For aggregated periods: Select Year + Halves (H1/H2) OR Year + Quarters (Q1-Q4)");
   configSheet.getRange(13, 1).setValue("4. Halves/Quarters aggregate all months in that period into one column");
-  configSheet.getRange(14, 1).setValue("5. Run 'Generate Overall Data', 'Generate Headcount Metrics', or 'Generate ELT Metrics' from menu");
+  configSheet.getRange(14, 1).setValue("5. Run 'Generate All CIQ', 'Generate Headcount by Site', or 'Generate Headcount by ELT' from menu");
   
-  // Add separate filter section for Termination Reasons
-  configSheet.getRange(16, 1).setValue("Filter for 'Termination Reasons' (separate from above):");
+  // Add separate filter section for Terminations Reasons Drilldown
+  configSheet.getRange(16, 1).setValue("Filter for 'Terminations Reasons Drilldown' (separate from above):");
   configSheet.getRange(16, 1).setFontWeight("bold");
   configSheet.getRange(16, 1).setFontSize(11);
   
@@ -1366,7 +1379,7 @@ function createFilterConfigSheet() {
   configSheet.getRange(18, 3).setFontStyle("italic");
   configSheet.getRange(18, 3).setFontColor("#666666");
   
-  configSheet.getRange(20, 1).setValue("6. For Termination Reasons: Select Year + Period Type (Halves or Quarters)");
+  configSheet.getRange(20, 1).setValue("6. For Terminations Reasons Drilldown: Select Year + Period Type (Halves or Quarters)");
   configSheet.getRange(21, 1).setValue("7. Period Type toggles between H1/H2 (Halves) or Q1-Q4 (Quarters)");
   
   configSheet.autoResizeColumns(1, 3);
@@ -1422,13 +1435,13 @@ function getUniqueFilterValues() {
  * Creates a table with Sites and Metrics as rows and Months/Years as columns
  * Metrics include: Average HC, Hires, Terminations, Regrettable Terms, Non-Regrettable Terms, Attrition %, Regrettable %
  */
-function generateHeadcountMetrics() {
+function generateHeadcountBySite() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let headcountSheet = ss.getSheetByName("Headcount Metrics");
+  let headcountSheet = ss.getSheetByName("Headcount by Site");
   const isNewSheet = !headcountSheet;
   
   if (!headcountSheet) {
-    headcountSheet = ss.insertSheet("Headcount Metrics");
+    headcountSheet = ss.insertSheet("Headcount by Site");
   }
   
   const rawDataSheet = ss.getSheetByName("RawData");
@@ -1549,7 +1562,7 @@ function generateHeadcountMetrics() {
     }
   }
   
-  // Headcount Metrics is structured by site, so no additional filters needed
+  // Headcount by Site is structured by site, so no additional filters needed
   let additionalFilters = {};
   
   // Build table: Site/Metric as rows, Periods as columns
@@ -1579,7 +1592,7 @@ function generateHeadcountMetrics() {
       const cacheKey = `${site}|${period.label}`;
       if (!metricsCache[cacheKey]) {
         try {
-          // Headcount Metrics is structured by site, so only filter by site
+          // Headcount by Site is structured by site, so only filter by site
           const periodFilters = { site: site };
           
           // If aggregated period, calculate aggregated metrics
@@ -1711,6 +1724,15 @@ function generateHeadcountMetrics() {
     }
   });
   
+  // If aggregation is used (Quarter/Halves), clear existing data but preserve formatting
+  if (aggregationType && !isNewSheet) {
+    // Clear all data but preserve formatting
+    const existingLastRow = headcountSheet.getLastRow();
+    if (existingLastRow > 0) {
+      headcountSheet.getRange(1, 1, existingLastRow, headerRow.length).clearContent();
+    }
+  }
+  
   // Write data in one batch operation - only values, preserve all user formatting
   if (dataRows.length > 0) {
     try {
@@ -1729,7 +1751,10 @@ function generateHeadcountMetrics() {
     }
   }
   
-  SpreadsheetApp.getUi().alert(`Headcount Metrics generated for ${sites.length} sites with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
+  SpreadsheetApp.getUi().alert(`Headcount by Site generated for ${sites.length} sites with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
+  
+  // Hide RawData, FilterOptions, and Termination Reason Mapping sheets after processing
+  hideProcessingSheets(ss);
 }
 
 /**
@@ -1738,13 +1763,13 @@ function generateHeadcountMetrics() {
  * Metrics include: Opening HC, Closing HC, Average HC, Hires, Terminations, Regrettable Terms, Non-Regrettable Terms, Retention %, Turnover %, Regrettable %
  * Can filter by Termination Reason
  */
-function generateELTMetrics() {
+function generateHeadcountByELT() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let eltSheet = ss.getSheetByName("ELT Metrics");
+  let eltSheet = ss.getSheetByName("Headcount by ELT");
   const isNewSheet = !eltSheet;
   
   if (!eltSheet) {
-    eltSheet = ss.insertSheet("ELT Metrics");
+    eltSheet = ss.insertSheet("Headcount by ELT");
   }
   
   const rawDataSheet = ss.getSheetByName("RawData");
@@ -1762,7 +1787,7 @@ function generateELTMetrics() {
     return;
   }
   
-  // ELT Metrics shows all ELTs - no filters needed (structured by ELT)
+  // Headcount by ELT shows all ELTs - no filters needed (structured by ELT)
   // Time period filters are applied below
   
   // Generate periods (monthly from Jan 2024 to current month)
@@ -1891,7 +1916,7 @@ function generateELTMetrics() {
       const cacheKey = `${elt}|${period.label}`;
       if (!metricsCache[cacheKey]) {
         try {
-          // ELT Metrics is structured by ELT
+          // Headcount by ELT is structured by ELT
           const periodFilters = { elt: elt };
           
           // If aggregated period, calculate aggregated metrics
@@ -2019,6 +2044,15 @@ function generateELTMetrics() {
     }
   });
   
+  // If aggregation is used (Quarter/Halves), clear existing data but preserve formatting
+  if (aggregationType && !isNewSheet) {
+    // Clear all data but preserve formatting
+    const existingLastRow = eltSheet.getLastRow();
+    if (existingLastRow > 0) {
+      eltSheet.getRange(1, 1, existingLastRow, headerRow.length).clearContent();
+    }
+  }
+  
   // Write data in one batch operation - only values, preserve all user formatting
   if (dataRows.length > 0) {
     try {
@@ -2030,20 +2064,23 @@ function generateELTMetrics() {
     }
   }
   
-  SpreadsheetApp.getUi().alert(`ELT Metrics generated for ${elts.length} ELTs with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
+  SpreadsheetApp.getUi().alert(`Headcount by ELT generated for ${elts.length} ELTs with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
+  
+  // Hide RawData, FilterOptions, and Termination Reason Mapping sheets after processing
+  hideProcessingSheets(ss);
 }
 
 /**
  * Generates job level headcount as of today with site-level breakdowns
  * Creates tables with job levels sorted in specific order, plus charts
  */
-function generateJobLevelHeadcount() {
+function generateHeadcountByJobLevel() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let jobLevelSheet = ss.getSheetByName("Job Level Headcount");
+  let jobLevelSheet = ss.getSheetByName("Headcount by Job Level");
   const isNewSheet = !jobLevelSheet;
   
   if (!jobLevelSheet) {
-    jobLevelSheet = ss.insertSheet("Job Level Headcount");
+    jobLevelSheet = ss.insertSheet("Headcount by Job Level");
   }
   
   const rawDataSheet = ss.getSheetByName("RawData");
@@ -2359,7 +2396,7 @@ function generateJobLevelHeadcount() {
         if (!overallChart) {
           const matchesTitle = title && (
             title.includes('Overall') || 
-            title.includes('Job Level Headcount (Overall)') ||
+            title.includes('Headcount by Job Level (Overall)') ||
             (title.toLowerCase().includes('overall') && title.toLowerCase().includes('headcount'))
           );
           // More flexible range matching: starts at A1 (row 1, col 1) with 2 columns
@@ -2407,7 +2444,7 @@ function generateJobLevelHeadcount() {
     
     Logger.log(`Chart detection results - Overall: ${overallChart ? 'FOUND' : 'NOT FOUND'}, Site: ${siteChart ? 'FOUND' : 'NOT FOUND'}, ELT: ${eltChart ? 'FOUND' : 'NOT FOUND'}`);
     
-    // Chart 1: Overall Job Level Headcount (Column Chart)
+    // Chart 1: Overall Headcount by Job Level (Column Chart)
     if (overallChart) {
       // Update existing chart - ONLY update data range, preserve all formatting
       try {
@@ -2435,7 +2472,7 @@ function generateJobLevelHeadcount() {
           const t = opts ? opts.title : null;
           const ranges = ch.getRanges();
           const r = ranges && ranges.length > 0 ? ranges[0] : null;
-          if ((t && (t.includes('Overall') || t.includes('Job Level Headcount (Overall)'))) ||
+          if ((t && (t.includes('Overall') || t.includes('Headcount by Job Level (Overall)'))) ||
               (r && r.getRow() === 1 && r.getColumn() === 1 && r.getNumColumns() === 2)) {
             foundInDoubleCheck = true;
             Logger.log(`Found overall chart in double-check - NOT creating new one`);
@@ -2452,7 +2489,7 @@ function generateJobLevelHeadcount() {
           .setChartType(Charts.ChartType.COLUMN)
           .addRange(overallChartRange)
           .setPosition(overallDataRows.length + 2, 4, 0, 0)
-          .setOption('title', 'Job Level Headcount (Overall)')
+          .setOption('title', 'Headcount by Job Level (Overall)')
           .setOption('legend.position', 'none')
           .setOption('hAxis.title', 'Job Level')
           .setOption('vAxis.title', 'Headcount')
@@ -2489,7 +2526,7 @@ function generateJobLevelHeadcount() {
         .setChartType(Charts.ChartType.COLUMN)
         .addRange(siteChartRange)
         .setPosition(siteBreakdownStartRow + siteBreakdownRows.length + 2, 4, 0, 0)
-        .setOption('title', 'Job Level Headcount by Site')
+        .setOption('title', 'Headcount by Job Level by Site')
         .setOption('isStacked', true)
         .setOption('legend.position', 'right')
         .setOption('hAxis.title', 'Job Level')
@@ -2527,7 +2564,7 @@ function generateJobLevelHeadcount() {
         .setChartType(Charts.ChartType.COLUMN)
         .addRange(filteredChartRange)
         .setPosition(eltBreakdownStartRow + eltBreakdownRows.length + 2, 4, 0, 0)
-        .setOption('title', 'Job Level Headcount by ELT (Use dropdown above to filter)')
+        .setOption('title', 'Headcount by Job Level by ELT (Use dropdown above to filter)')
         .setOption('isStacked', true)
         .setOption('legend.position', 'right')
         .setOption('hAxis.title', 'Job Level')
@@ -2555,7 +2592,10 @@ function generateJobLevelHeadcount() {
     // Charts are optional, continue even if they fail
   }
   
-  SpreadsheetApp.getUi().alert(`Job Level Headcount generated for ${sortedJobLevels.length} job levels across ${sortedSites.length} sites and ${sortedELTs.length} ELTs as of today.`);
+  SpreadsheetApp.getUi().alert(`Headcount by Job Level generated for ${sortedJobLevels.length} job levels across ${sortedSites.length} sites and ${sortedELTs.length} ELTs as of today.`);
+  
+  // Hide RawData, FilterOptions, and Termination Reason Mapping sheets after processing
+  hideProcessingSheets(ss);
 }
 
 /**
@@ -2706,13 +2746,13 @@ function mapTerminationReasons() {
  * Generates termination reasons table for pie chart
  * Filterable by time period (month/year, quarter, year), site, department, ELT
  */
-function generateTerminationReasonsTable() {
+function generateTerminationsReasonsDrilldown() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let termReasonsSheet = ss.getSheetByName("Termination Reasons");
+  let termReasonsSheet = ss.getSheetByName("Terminations Reasons Drilldown");
   const isNewSheet = !termReasonsSheet;
   
   if (!termReasonsSheet) {
-    termReasonsSheet = ss.insertSheet("Termination Reasons");
+    termReasonsSheet = ss.insertSheet("Terminations Reasons Drilldown");
   }
   
   const rawDataSheet = ss.getSheetByName("RawData");
@@ -2734,6 +2774,7 @@ function generateTerminationReasonsTable() {
   
   // Get time period filters for Termination Reasons (separate section)
   let timePeriodFilter = null;
+  let needsFullClear = false; // Flag to determine if we need to fully clear the sheet
   if (filterConfigSheet) {
     // Use Termination Reasons filter section (rows 17-18)
     const termYearFilter = filterConfigSheet.getRange(17, 2).getValue(); // Year filter for Termination Reasons
@@ -2744,14 +2785,23 @@ function generateTerminationReasonsTable() {
       if (periodTypeFilter === "Halves") {
         // Year + Halves: filter by both H1 and H2 (show both)
         timePeriodFilter = { type: 'year_halves', value: year };
+        needsFullClear = true; // Need to fully clear when Halves filter is used
       } else if (periodTypeFilter === "Quarters") {
         // Year + Quarters: filter by all quarters (show Q1-Q4)
         timePeriodFilter = { type: 'year_quarters', value: year };
+        needsFullClear = true; // Need to fully clear when Quarters filter is used
       } else {
         // Year only: show all months in year
         timePeriodFilter = { type: 'year', value: year };
+        needsFullClear = true; // Also clear for year filter to ensure clean data
       }
     }
+  }
+  
+  // If Halves/Quarters filter is used, fully clear the sheet (data + formatting) before inputting new data
+  if (needsFullClear && !isNewSheet) {
+    // Clear all content and formatting from the sheet
+    termReasonsSheet.clear();
   }
   
   // Helper function to parse date
@@ -3047,6 +3097,23 @@ function generateTerminationReasonsTable() {
     // Only auto-resize if columns are too narrow (optional - can be removed if you want to preserve all formatting)
   }
   
-  SpreadsheetApp.getUi().alert(`Termination Reasons table generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
+  SpreadsheetApp.getUi().alert(`Terminations Reasons Drilldown generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
+  
+  // Hide RawData, FilterOptions, and Termination Reason Mapping sheets after processing
+  hideProcessingSheets(ss);
+}
+
+/**
+ * Hides processing sheets (RawData, FilterOptions, Termination Reason Mapping) after processing is completed
+ */
+function hideProcessingSheets(ss) {
+  const sheetsToHide = ["RawData", "FilterOptions", "Termination Reason Mapping"];
+  
+  sheetsToHide.forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (sheet) {
+      sheet.hideSheet();
+    }
+  });
 }
 
