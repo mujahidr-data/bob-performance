@@ -1025,6 +1025,7 @@ function generateHeadcountMetrics() {
   ];
   
   // Calculate metrics for each site and period
+  // Optimize: calculate all metrics once per site/period, then extract what we need
   const dataRows = [];
   sites.forEach(site => {
     // For each site, create rows for each metric
@@ -1070,38 +1071,54 @@ function generateHeadcountMetrics() {
     });
   });
   
-  // Write data
+  // Write data in one batch operation
   if (dataRows.length > 0) {
-    headcountSheet.getRange(2, 1, dataRows.length, headerRow.length).setValues(dataRows);
-    
-    // Format percentage columns (Attrition % and Regrettable %)
-    // These are at indices 5 and 6 in metricLabels array
-    if (isNewSheet && dataRows.length > 0) {
-      try {
-        // Format percentage rows: Attrition % (index 5) and Regrettable % (index 6)
-        // For each site, format rows at positions: baseRow + 5 and baseRow + 6
+    try {
+      headcountSheet.getRange(2, 1, dataRows.length, headerRow.length).setValues(dataRows);
+      
+      // Format percentage columns (Attrition % and Regrettable %) - simplified approach
+      // Only format if it's a new sheet to avoid overwriting user formatting
+      if (isNewSheet) {
+        // Collect all percentage row ranges and format in batch
+        const percentageRanges = [];
         sites.forEach((site, siteIndex) => {
           const baseRow = siteIndex * metricLabels.length + 2; // +2 because data starts at row 2
           const attritionRow = baseRow + 5; // Attrition % is at index 5
           const regrettableRow = baseRow + 6; // Regrettable % is at index 6
           
           if (attritionRow <= dataRows.length + 1) {
-            headcountSheet.getRange(attritionRow, 2, 1, periods.length).setNumberFormat("0.0%");
+            percentageRanges.push(headcountSheet.getRange(attritionRow, 2, 1, periods.length));
           }
           if (regrettableRow <= dataRows.length + 1) {
-            headcountSheet.getRange(regrettableRow, 2, 1, periods.length).setNumberFormat("0.0%");
+            percentageRanges.push(headcountSheet.getRange(regrettableRow, 2, 1, periods.length));
           }
         });
-      } catch (error) {
-        Logger.log(`Error formatting percentage columns: ${error.message}`);
-        // Continue execution even if formatting fails
+        
+        // Format all percentage ranges at once
+        if (percentageRanges.length > 0) {
+          percentageRanges.forEach(range => {
+            try {
+              range.setNumberFormat("0.0%");
+            } catch (e) {
+              Logger.log(`Error formatting range: ${e.message}`);
+            }
+          });
+        }
       }
+    } catch (error) {
+      Logger.log(`Error writing headcount metrics: ${error.message}`);
+      SpreadsheetApp.getUi().alert(`Error generating headcount metrics: ${error.message}`);
+      return;
     }
   }
   
-  // Only auto-resize if new sheet
-  if (isNewSheet) {
-    headcountSheet.autoResizeColumns(1, headerRow.length);
+  // Only auto-resize if new sheet (skip if it might be slow)
+  if (isNewSheet && headerRow.length < 50) {
+    try {
+      headcountSheet.autoResizeColumns(1, Math.min(headerRow.length, 10)); // Limit to first 10 columns
+    } catch (e) {
+      Logger.log(`Error auto-resizing: ${e.message}`);
+    }
   }
   
   SpreadsheetApp.getUi().alert(`Headcount Metrics generated for ${sites.length} sites with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
