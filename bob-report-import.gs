@@ -1182,6 +1182,44 @@ function generateAllCIQ() {
     metricsSheet.getRange(2, 9, lastRow - 1, 4).setNumberFormat("0.0%");
   }
   
+  // Apply conditional formatting to highlight top 2 values in percentage columns
+  if (values.length > 0) {
+    // Clear existing conditional formatting rules for percentage columns first
+    const percentageRange = metricsSheet.getRange(2, 9, values.length, 4);
+    const existingRules = metricsSheet.getConditionalFormatRules();
+    const filteredRules = existingRules.filter(rule => {
+      const ranges = rule.getRanges();
+      return !ranges.some(r => {
+        const ruleStartRow = r.getRow();
+        const ruleStartCol = r.getColumn();
+        const ruleNumRows = r.getNumRows();
+        const ruleNumCols = r.getNumColumns();
+        // Check if rule overlaps with percentage columns (9-12) and data rows (2 to lastRow)
+        return ruleStartCol >= 9 && ruleStartCol <= 12 && 
+               ruleStartRow >= 2 && ruleStartRow <= lastRow;
+      });
+    });
+    metricsSheet.setConditionalFormatRules(filteredRules);
+    
+    // Apply conditional formatting for top 2 values in each percentage column
+    for (let col = 9; col <= 12; col++) {
+      const colRange = metricsSheet.getRange(2, col, values.length, 1);
+      const colLetter = colNumToLetter(col); // Convert to column letter
+      
+      const top2Rule = SpreadsheetApp.newConditionalFormatRule()
+        .setRanges([colRange])
+        .whenFormulaSatisfied(`=RANK(${colLetter}2,$${colLetter}$2:$${colLetter}$${lastRow},0)<=2`)
+        .setBold(true)
+        .setFontColor("#ff0000")
+        .setBackground("#ffebee")
+        .build();
+      
+      const rules = metricsSheet.getConditionalFormatRules();
+      rules.push(top2Rule);
+      metricsSheet.setConditionalFormatRules(rules);
+    }
+  }
+  
   // Only auto-resize columns if it's a new sheet (preserve user column widths)
   if (isNewSheet) {
   metricsSheet.autoResizeColumns(1, headers.length);
@@ -1759,6 +1797,76 @@ function generateHeadcountBySite() {
     }
   }
   
+  // Apply conditional formatting to percentage metric rows (Retention %, Turnover %, Regrettable %)
+  if (dataRows.length > 0 && periods.length > 0) {
+    // Metric indices: 7 = Retention %, 8 = Turnover %, 9 = Regrettable %
+    const percentageMetricIndices = [7, 8, 9]; // Retention %, Turnover %, Regrettable %
+    
+    // Clear existing conditional formatting rules for percentage rows
+    const existingRules = headcountSheet.getConditionalFormatRules();
+    const filteredRules = existingRules.filter(rule => {
+      const ranges = rule.getRanges();
+      return !ranges.some(r => {
+        const ruleStartRow = r.getRow();
+        const ruleStartCol = r.getColumn();
+        // Check if rule is in period columns (2 onwards)
+        return ruleStartCol >= 2 && ruleStartCol <= headerRow.length;
+      });
+    });
+    headcountSheet.setConditionalFormatRules(filteredRules);
+    
+    // Track which rows contain percentage metrics
+    // Structure: headerRow, then for each site: headerRow, metricRows, blankRow
+    let sheetRow = 1; // Start at row 1 (first header)
+    const percentageRows = []; // Store row numbers that contain percentage metrics
+    
+    sites.forEach((site, siteIndex) => {
+      sheetRow++; // Skip to first metric row for this site
+      
+      // For each percentage metric (Retention %, Turnover %, Regrettable %)
+      percentageMetricIndices.forEach(metricIndex => {
+        const metricRow = sheetRow + metricIndex;
+        percentageRows.push(metricRow);
+      });
+      
+      // Move to next site section
+      sheetRow += metricLabels.length; // Skip all metric rows
+      if (siteIndex < sites.length - 1) {
+        sheetRow++; // Skip blank row between sites
+        sheetRow++; // Skip next site's header row
+      }
+    });
+    
+    // Apply conditional formatting to each percentage metric row
+    const periodStartCol = 2; // First period column
+    const periodEndCol = headerRow.length; // Last column
+    
+    percentageRows.forEach(rowNum => {
+      if (rowNum <= dataRows.length) {
+        // Apply conditional formatting for top 2 values in this row across all period columns
+        const rowRange = headcountSheet.getRange(rowNum, periodStartCol, 1, periodEndCol - periodStartCol + 1);
+        const startColLetter = colNumToLetter(periodStartCol);
+        const endColLetter = colNumToLetter(periodEndCol);
+        
+        // Create formula to check if this value is in top 2 for this row
+        // Use INDIRECT to make the formula work for each cell in the range
+        const formula = `=RANK(INDIRECT(ADDRESS(ROW(),COLUMN())),$${startColLetter}$${rowNum}:$${endColLetter}$${rowNum},0)<=2`;
+        
+        const top2Rule = SpreadsheetApp.newConditionalFormatRule()
+          .setRanges([rowRange])
+          .whenFormulaSatisfied(formula)
+          .setBold(true)
+          .setFontColor("#ff0000")
+          .setBackground("#ffebee")
+          .build();
+        
+        const rules = headcountSheet.getConditionalFormatRules();
+        rules.push(top2Rule);
+        headcountSheet.setConditionalFormatRules(rules);
+      }
+    });
+  }
+  
   SpreadsheetApp.getUi().alert(`Headcount by Site generated for ${sites.length} sites with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
   
   // Hide RawData, FilterOptions, and Termination Reason Mapping sheets after processing
@@ -2067,6 +2175,76 @@ function generateHeadcountByELT() {
       SpreadsheetApp.getUi().alert(`Error generating ELT metrics: ${error.message}`);
       return;
     }
+  }
+  
+  // Apply conditional formatting to percentage metric rows (Retention %, Turnover %, Regrettable %)
+  if (dataRows.length > 0 && periods.length > 0) {
+    // Metric indices: 7 = Retention %, 8 = Turnover %, 9 = Regrettable %
+    const percentageMetricIndices = [7, 8, 9]; // Retention %, Turnover %, Regrettable %
+    
+    // Clear existing conditional formatting rules for percentage rows
+    const existingRules = eltSheet.getConditionalFormatRules();
+    const filteredRules = existingRules.filter(rule => {
+      const ranges = rule.getRanges();
+      return !ranges.some(r => {
+        const ruleStartRow = r.getRow();
+        const ruleStartCol = r.getColumn();
+        // Check if rule is in period columns (2 onwards)
+        return ruleStartCol >= 2 && ruleStartCol <= headerRow.length;
+      });
+    });
+    eltSheet.setConditionalFormatRules(filteredRules);
+    
+    // Track which rows contain percentage metrics
+    // Structure: headerRow, then for each ELT: headerRow, metricRows, blankRow
+    let sheetRow = 1; // Start at row 1 (first header)
+    const percentageRows = []; // Store row numbers that contain percentage metrics
+    
+    elts.forEach((elt, eltIndex) => {
+      sheetRow++; // Skip to first metric row for this ELT
+      
+      // For each percentage metric (Retention %, Turnover %, Regrettable %)
+      percentageMetricIndices.forEach(metricIndex => {
+        const metricRow = sheetRow + metricIndex;
+        percentageRows.push(metricRow);
+      });
+      
+      // Move to next ELT section
+      sheetRow += metricLabels.length; // Skip all metric rows
+      if (eltIndex < elts.length - 1) {
+        sheetRow++; // Skip blank row between ELTs
+        sheetRow++; // Skip next ELT's header row
+      }
+    });
+    
+    // Apply conditional formatting to each percentage metric row
+    const periodStartCol = 2; // First period column
+    const periodEndCol = headerRow.length; // Last column
+    
+    percentageRows.forEach(rowNum => {
+      if (rowNum <= dataRows.length) {
+        // Apply conditional formatting for top 2 values in this row across all period columns
+        const rowRange = eltSheet.getRange(rowNum, periodStartCol, 1, periodEndCol - periodStartCol + 1);
+        const startColLetter = colNumToLetter(periodStartCol);
+        const endColLetter = colNumToLetter(periodEndCol);
+        
+        // Create formula to check if this value is in top 2 for this row
+        // Use INDIRECT to make the formula work for each cell in the range
+        const formula = `=RANK(INDIRECT(ADDRESS(ROW(),COLUMN())),$${startColLetter}$${rowNum}:$${endColLetter}$${rowNum},0)<=2`;
+        
+        const top2Rule = SpreadsheetApp.newConditionalFormatRule()
+          .setRanges([rowRange])
+          .whenFormulaSatisfied(formula)
+          .setBold(true)
+          .setFontColor("#ff0000")
+          .setBackground("#ffebee")
+          .build();
+        
+        const rules = eltSheet.getConditionalFormatRules();
+        rules.push(top2Rule);
+        eltSheet.setConditionalFormatRules(rules);
+      }
+    });
   }
   
   SpreadsheetApp.getUi().alert(`Headcount by ELT generated for ${elts.length} ELTs with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
@@ -3134,6 +3312,21 @@ function hideProcessingSheets(ss) {
       sheet.hideSheet();
     }
   });
+}
+
+/**
+ * Helper function to convert column number to letter (1=A, 2=B, 27=AA, etc.)
+ * @param {number} num - Column number (1-based)
+ * @returns {string} Column letter(s)
+ */
+function colNumToLetter(num) {
+  let letter = '';
+  while (num > 0) {
+    const remainder = (num - 1) % 26;
+    letter = String.fromCharCode(65 + remainder) + letter;
+    num = Math.floor((num - 1) / 26);
+  }
+  return letter;
 }
 
 /**
