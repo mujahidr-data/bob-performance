@@ -799,31 +799,19 @@ function generateOverallData() {
   }
   
   // Add filter info if filters are applied
-  let infoRow = lastRow + 2;
   if (Object.keys(filters).length > 0) {
     const filterInfo = ["Filters Applied:"];
     if (filters.site) filterInfo.push(`Site: ${filters.site}`);
     if (filters.elt) filterInfo.push(`ELT: ${filters.elt}`);
     if (filters.department) filterInfo.push(`Department: ${filters.department}`);
-    metricsSheet.getRange(infoRow, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
-    infoRow += filterInfo.length + 1;
+    metricsSheet.getRange(lastRow + 2, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
   }
   
-  // Add formula descriptions in Column T (index 20) only if they don't already exist
-  // Check if "Formula Descriptions:" already exists in Column T
-  const lastRowInSheet = metricsSheet.getLastRow();
-  let descriptionsExist = false;
-  
-  if (lastRowInSheet >= infoRow) {
-    // Check a few rows starting from infoRow to see if descriptions exist
-    for (let checkRow = infoRow; checkRow <= Math.min(infoRow + 5, lastRowInSheet); checkRow++) {
-      const cellValue = metricsSheet.getRange(checkRow, 20).getValue();
-      if (cellValue && String(cellValue).trim() === "Formula Descriptions:") {
-        descriptionsExist = true;
-        break;
-      }
-    }
-  }
+  // Add formula descriptions in Column T, Row 1 only if they don't already exist
+  // Check if "Formula Descriptions:" already exists in Column T, Row 1
+  const descStartRow = 1;
+  const descCellValue = metricsSheet.getRange(descStartRow, 20).getValue();
+  const descriptionsExist = descCellValue && String(descCellValue).trim() === "Formula Descriptions:";
   
   if (!descriptionsExist) {
     const descriptions = [
@@ -845,12 +833,12 @@ function generateOverallData() {
       ["Where Average Headcount = (Opening HC + Closing HC) / 2"]
     ];
     
-    // Column T is index 20 (1-based)
-    metricsSheet.getRange(infoRow, 20, descriptions.length, 1).setValues(descriptions);
+    // Column T is index 20 (1-based), start from Row 1
+    metricsSheet.getRange(descStartRow, 20, descriptions.length, 1).setValues(descriptions);
     
     // Format the description section
     if (isNewSheet) {
-      const descRange = metricsSheet.getRange(infoRow, 20, 1, 1);
+      const descRange = metricsSheet.getRange(descStartRow, 20, 1, 1);
       descRange.setFontWeight("bold");
       // Make column T wider for readability
       metricsSheet.setColumnWidth(20, 400);
