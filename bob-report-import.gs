@@ -3292,7 +3292,6 @@ function createUserGuide() {
   // Format all content rows
   const dataRange = guideSheet.getRange(2, 1, currentRow - 2, 2);
   dataRange.setVerticalAlignment("top");
-  dataRange.setPadding(5, 5, 5, 5);
   
   // Add borders to title
   guideSheet.getRange(1, 1).setBorder(true, true, true, true, true, true, "#4285f4", SpreadsheetApp.BorderStyle.SOLID);
