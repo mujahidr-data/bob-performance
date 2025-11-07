@@ -55,13 +55,16 @@ function onOpen() {
   ui.createMenu('Bob HR Analytics')
     // Step 1: Import data
     .addItem('Step 1: Fetch Bob Report', 'fetchBobReportCSV')
+    .addSeparator()
     // Step 2: Process/clean data
     .addItem('Step 2: Reassign ELT Values', 'reassignELTValues')
-    .addItem('Fix Department Typos', 'fixDepartmentTypos')
+    .addItem('Step 2b: Fix Department Typos', 'fixDepartmentTypos')
+    .addSeparator()
     // Step 3: Review available filters
     .addItem('Step 3: Update Filter Options', 'updateFilterOptions')
     // Step 4: Set up filter selection
     .addItem('Step 4: Create Filter Config Sheet', 'createFilterConfigSheet')
+    .addSeparator()
     // Step 5: Generate metrics
     .addItem('Step 5: Generate HR Metrics', 'generateHRMetrics')
     .addToUi();
