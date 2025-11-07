@@ -1228,7 +1228,10 @@ function generateHeadcountMetrics() {
   // Build data rows using cached metrics
   const dataRows = [];
   sites.forEach((site, siteIndex) => {
-    // For each site, create rows for each metric (no site header rows)
+    // Add header row at the start of each site section
+    dataRows.push(headerRow);
+    
+    // For each site, create rows for each metric
     metricLabels.forEach((metricLabel, metricIndex) => {
       const row = [`${site} - ${metricLabel}`];
       
