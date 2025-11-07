@@ -1751,17 +1751,54 @@ function generateJobLevelHeadcount() {
     let siteChart = null;
     let eltChart = null;
     
-    // Find existing charts by title
+    // Define expected ranges for each chart type
+    const overallChartRange = jobLevelSheet.getRange(1, 1, overallDataRows.length + 1, 2);
+    const siteChartNumCols = sortedSites.length + 1; // Job Level + sites (excluding Total)
+    const siteChartRange = jobLevelSheet.getRange(siteBreakdownStartRow, 1, siteBreakdownRows.length + 1, siteChartNumCols);
+    const eltChartNumCols = sortedELTs.length + 1; // Job Level + ELTs (excluding Total)
+    const eltChartRange = jobLevelSheet.getRange(eltBreakdownStartRow, 1, eltBreakdownRows.length + 1, eltChartNumCols);
+    
+    // Find existing charts by title and/or range
     existingCharts.forEach(chart => {
       try {
         const options = chart.getOptions();
         const title = options ? options.title : null;
+        
+        // Try to identify by title first
         if (title === 'Job Level Headcount (Overall)') {
           overallChart = chart;
         } else if (title === 'Job Level Headcount by Site') {
           siteChart = chart;
         } else if (title === 'Job Level Headcount by ELT') {
           eltChart = chart;
+        } else {
+          // If title doesn't match, try to identify by range
+          // Get chart ranges and check if they match expected ranges
+          try {
+            const chartRanges = chart.getRanges();
+            if (chartRanges && chartRanges.length > 0) {
+              const firstRange = chartRanges[0];
+              const rangeA1 = firstRange.getA1Notation();
+              
+              // Check if range matches overall chart (starts at A1, 2 columns)
+              if (firstRange.getRow() === 1 && firstRange.getColumn() === 1 && firstRange.getNumColumns() === 2 && !overallChart) {
+                overallChart = chart;
+                Logger.log(`Found overall chart by range: ${rangeA1}`);
+              }
+              // Check if range matches site chart (starts at siteBreakdownStartRow, siteChartNumCols columns)
+              else if (firstRange.getRow() === siteBreakdownStartRow && firstRange.getColumn() === 1 && firstRange.getNumColumns() === siteChartNumCols && !siteChart) {
+                siteChart = chart;
+                Logger.log(`Found site chart by range: ${rangeA1}`);
+              }
+              // Check if range matches ELT chart (starts at eltBreakdownStartRow, eltChartNumCols columns)
+              else if (firstRange.getRow() === eltBreakdownStartRow && firstRange.getColumn() === 1 && firstRange.getNumColumns() === eltChartNumCols && !eltChart) {
+                eltChart = chart;
+                Logger.log(`Found ELT chart by range: ${rangeA1}`);
+              }
+            }
+          } catch (rangeError) {
+            Logger.log(`Error reading chart ranges: ${rangeError.message}`);
+          }
         }
       } catch (e) {
         // Skip charts that can't be read
@@ -1770,8 +1807,6 @@ function generateJobLevelHeadcount() {
     });
     
     // Chart 1: Overall Job Level Headcount (Column Chart)
-    const overallChartRange = jobLevelSheet.getRange(1, 1, overallDataRows.length + 1, 2);
-    
     if (overallChart) {
       // Update existing chart - preserve position and formatting
       try {
@@ -1801,9 +1836,6 @@ function generateJobLevelHeadcount() {
     
     // Chart 2: Site Breakdown (Stacked Column Chart)
     // Exclude the "Total" column - only include Job Level + Site columns
-    const siteChartNumCols = sortedSites.length + 1; // Job Level + sites (excluding Total)
-    const siteChartRange = jobLevelSheet.getRange(siteBreakdownStartRow, 1, siteBreakdownRows.length + 1, siteChartNumCols);
-    
     if (siteChart) {
       // Update existing chart - preserve position and formatting
       try {
@@ -1834,9 +1866,6 @@ function generateJobLevelHeadcount() {
     
     // Chart 3: ELT Breakdown (Stacked Column Chart)
     // Exclude the "Total" column - only include Job Level + ELT columns
-    const eltChartNumCols = sortedELTs.length + 1; // Job Level + ELTs (excluding Total)
-    const eltChartRange = jobLevelSheet.getRange(eltBreakdownStartRow, 1, eltBreakdownRows.length + 1, eltChartNumCols);
-    
     if (eltChart) {
       // Update existing chart - preserve position and formatting
       try {
