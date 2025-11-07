@@ -398,11 +398,12 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
            termType === "End of Contract";
   }).length;
   
-  // Calculate rates
+  // Calculate rates (return as decimals, sheet will format as percentage)
+  // Original formulas: attrition = terms / avgHC, retention = (openingHC - terms) / openingHC, turnover = terms / avgHC
   const avgHC = (openingHC + closingHC) / 2;
-  const attrition = avgHC > 0 ? (terms / avgHC) * 100 : 0;
-  const retention = openingHC > 0 ? ((openingHC - terms) / openingHC) * 100 : 0;
-  const turnover = avgHC > 0 ? (terms / avgHC) * 100 : 0;
+  const attrition = avgHC > 0 ? (terms / avgHC) : 0;
+  const retention = openingHC > 0 ? ((openingHC - terms) / openingHC) : 0;
+  const turnover = avgHC > 0 ? (terms / avgHC) : 0;
   
   return {
     openingHC,
@@ -411,9 +412,10 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     terms,
     voluntaryTerms,
     involuntaryTerms,
-    attrition: Math.round(attrition * 10) / 10, // Round to 1 decimal
-    retention: Math.round(retention * 10) / 10,
-    turnover: Math.round(turnover * 10) / 10
+    // Round to 4 decimal places for accurate percentage display (0.9680 = 96.80%)
+    attrition: Math.round(attrition * 10000) / 10000,
+    retention: Math.round(retention * 10000) / 10000,
+    turnover: Math.round(turnover * 10000) / 10000
   };
 }
 
