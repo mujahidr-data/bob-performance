@@ -1734,11 +1734,8 @@ function generateHeadcountBySite() {
   
   // Clear existing data but preserve formatting (for both new and existing sheets)
   if (!isNewSheet) {
-    // Clear all data but preserve formatting
-    const existingLastRow = headcountSheet.getLastRow();
-    if (existingLastRow > 0) {
-      headcountSheet.getRange(1, 1, existingLastRow, headerRow.length).clearContent();
-    }
+    // Clear all data from entire sheet but preserve formatting
+    headcountSheet.getRange(1, 1, headcountSheet.getMaxRows(), headcountSheet.getMaxColumns()).clearContent();
   }
   
   // Write data in one batch operation - only values, preserve all user formatting
@@ -2054,11 +2051,8 @@ function generateHeadcountByELT() {
   
   // Clear existing data but preserve formatting (for both new and existing sheets)
   if (!isNewSheet) {
-    // Clear all data but preserve formatting
-    const existingLastRow = eltSheet.getLastRow();
-    if (existingLastRow > 0) {
-      eltSheet.getRange(1, 1, existingLastRow, headerRow.length).clearContent();
-    }
+    // Clear all data from entire sheet but preserve formatting
+    eltSheet.getRange(1, 1, eltSheet.getMaxRows(), eltSheet.getMaxColumns()).clearContent();
   }
   
   // Write data in one batch operation - only values, preserve all user formatting
