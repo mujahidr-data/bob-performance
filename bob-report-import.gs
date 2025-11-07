@@ -77,13 +77,13 @@ function onOpen() {
  * Note: Google Sheets uses 1-based columns, but arrays are 0-indexed
  */
 const COLUMN_INDICES = {
-  START_DATE: 2,           // Column C (0-indexed: 2) - matches formula C:C
-  TERMINATION_DATE: 14,    // Column O (0-indexed: 14) - matches formula O:O
-  LEAVE_TERMINATION_TYPE: 16, // Column Q (0-indexed: 16) - matches formula Q:Q
+  START_DATE: 2,           // Column C (0-indexed: 2) - Start Date in YYYY-MM-DD format
+  TERMINATION_DATE: 17,    // Column R (0-indexed: 17) - Termination date (blank for active employees)
+  LEAVE_TERMINATION_TYPE: 19, // Column T (0-indexed: 19) - Leave and termination type
   DEPARTMENT: 6,           // Column G (0-indexed: 6)
   ELT: 7,                  // Column H (0-indexed: 7)
   SITE: 8,                 // Column I (0-indexed: 8)
-  STATUS: 16               // Column Q (0-indexed: 16) - same as LEAVE_TERMINATION_TYPE
+  STATUS: 16               // Column Q (0-indexed: 16) - Status (Active/Inactive, Employed/Terminated)
 };
 
 /**
