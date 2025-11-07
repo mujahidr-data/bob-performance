@@ -1126,8 +1126,30 @@ function generateHeadcountMetrics() {
     "Regrettable %"
   ];
   
-  // Calculate metrics for each site and period
-  // Optimize: calculate all metrics once per site/period, then extract what we need
+  // OPTIMIZATION: Cache metrics calculations to avoid redundant processing
+  // Key format: "site|periodLabel" -> metrics object
+  const metricsCache = {};
+  
+  // Pre-calculate all metrics for each site/period combination once
+  sites.forEach(site => {
+    periods.forEach(period => {
+      const cacheKey = `${site}|${period.label}`;
+      if (!metricsCache[cacheKey]) {
+        try {
+          // Combine site filter with any other filters from FilterConfig
+          const periodFilters = { site: site };
+          if (additionalFilters.elt) periodFilters.elt = additionalFilters.elt;
+          if (additionalFilters.department) periodFilters.department = additionalFilters.department;
+          metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
+        } catch (error) {
+          Logger.log(`Error calculating metrics for ${site} in ${period.label}: ${error.message}`);
+          metricsCache[cacheKey] = null;
+        }
+      }
+    });
+  });
+  
+  // Build data rows using cached metrics
   const dataRows = [];
   sites.forEach((site, siteIndex) => {
     // For each site, create rows for each metric
@@ -1135,48 +1157,45 @@ function generateHeadcountMetrics() {
       const row = [`${site} - ${metricLabel}`];
       
       periods.forEach(period => {
-        try {
-          // Combine site filter with any other filters from FilterConfig
-          const periodFilters = { site: site };
-          if (additionalFilters.elt) periodFilters.elt = additionalFilters.elt;
-          if (additionalFilters.department) periodFilters.department = additionalFilters.department;
-          const metrics = calculateHRMetrics(period.start, period.end, periodFilters);
-          
-          let value = 0;
-          switch(metricIndex) {
-            case 0: // Average Headcount - round to nearest integer
-              value = Math.round((metrics.openingHC + metrics.closingHC) / 2);
-              break;
-            case 1: // Hires
-              value = metrics.hires;
-              break;
-            case 2: // Terminations
-              value = metrics.terms;
-              break;
-            case 3: // Regrettable Terms
-              value = metrics.regrettableTerms;
-              break;
-            case 4: // Non-Regrettable Terms
-              value = metrics.terms - metrics.regrettableTerms;
-              break;
-            case 5: // Attrition %
-              value = metrics.attrition;
-              break;
-            case 6: // Regrettable %
-              const avgHC = (metrics.openingHC + metrics.closingHC) / 2;
-              value = avgHC > 0 ? (metrics.regrettableTerms / avgHC) : 0;
-              break;
-          }
-          // For count metrics (0-4), use blank instead of 0. For percentages (5-6), keep 0
-          if (metricIndex < 5 && value === 0) {
-            row.push(""); // Blank for zero counts
-          } else {
-            row.push(value);
-          }
-        } catch (error) {
-          Logger.log(`Error calculating ${metricLabel} for ${site} in ${period.label}: ${error.message}`);
+        const cacheKey = `${site}|${period.label}`;
+        const metrics = metricsCache[cacheKey];
+        
+        if (!metrics) {
           // Use blank for counts, 0 for percentages
           row.push(metricIndex < 5 ? "" : 0);
+          return;
+        }
+        
+        let value = 0;
+        switch(metricIndex) {
+          case 0: // Average Headcount - round to nearest integer
+            value = Math.round((metrics.openingHC + metrics.closingHC) / 2);
+            break;
+          case 1: // Hires
+            value = metrics.hires;
+            break;
+          case 2: // Terminations
+            value = metrics.terms;
+            break;
+          case 3: // Regrettable Terms
+            value = metrics.regrettableTerms;
+            break;
+          case 4: // Non-Regrettable Terms
+            value = metrics.terms - metrics.regrettableTerms;
+            break;
+          case 5: // Attrition %
+            value = metrics.attrition;
+            break;
+          case 6: // Regrettable %
+            const avgHC = (metrics.openingHC + metrics.closingHC) / 2;
+            value = avgHC > 0 ? (metrics.regrettableTerms / avgHC) : 0;
+            break;
+        }
+        // For count metrics (0-4), use blank instead of 0. For percentages (5-6), keep 0
+        if (metricIndex < 5 && value === 0) {
+          row.push(""); // Blank for zero counts
+        } else {
+          row.push(value);
         }
       });
       dataRows.push(row);
