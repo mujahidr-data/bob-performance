@@ -38,6 +38,9 @@ function fetchBobReportCSV() {
   // Auto-resize columns
   sheet.autoResizeColumns(1, filteredData[0].length);
   Logger.log(`Bob report updated. Rows after filtering: ${filteredData.length - 1}`);
+  
+  // Reassign ELT values based on business rules
+  reassignELTValues();
 }
 
 /**
@@ -48,6 +51,8 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Bob HR Analytics')
     .addItem('Fetch Bob Report', 'fetchBobReportCSV')
+    .addSeparator()
+    .addItem('Reassign ELT Values', 'reassignELTValues')
     .addSeparator()
     .addItem('Generate HR Metrics', 'generateHRMetrics')
     .addItem('Create Filter Config Sheet', 'createFilterConfigSheet')
@@ -70,6 +75,82 @@ const COLUMN_INDICES = {
   SITE: 8,                 // Column I (0-indexed: 8)
   STATUS: 16               // Column Q (0-indexed: 16) - same as LEAVE_TERMINATION_TYPE
 };
+
+/**
+ * Reassigns ELT values based on business rules:
+ * - All "Heather" → "Jyoti"
+ * - All "Moni" → "Gaurav" if Department is "Engineering" or "Product Success"
+ * - All "Moni" → "Himanshu" if Department is "Product Management" or "Product Design"
+ */
+function reassignELTValues() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rawDataSheet = ss.getSheetByName("RawData");
+  
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  const data = rawDataSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    SpreadsheetApp.getUi().alert("No data found in RawData sheet.");
+    return;
+  }
+  
+  const header = data[0];
+  const rows = data.slice(1);
+  let reassignmentCount = 0;
+  const reassignments = [];
+  
+  // Process each row (skip header)
+  rows.forEach((row, index) => {
+    const currentELT = String(row[COLUMN_INDICES.ELT] || "").trim();
+    const department = String(row[COLUMN_INDICES.DEPARTMENT] || "").trim();
+    let newELT = null;
+    
+    // Rule 1: All "Heather" → "Jyoti"
+    if (currentELT === "Heather") {
+      newELT = "Jyoti";
+    }
+    // Rule 2: All "Moni" → "Gaurav" if Department is "Engineering" or "Product Success"
+    else if (currentELT === "Moni" && (department === "Engineering" || department === "Product Success")) {
+      newELT = "Gaurav";
+    }
+    // Rule 3: All "Moni" → "Himanshu" if Department is "Product Management" or "Product Design"
+    else if (currentELT === "Moni" && (department === "Product Management" || department === "Product Design")) {
+      newELT = "Himanshu";
+    }
+    
+    // Update the row if reassignment is needed
+    if (newELT) {
+      row[COLUMN_INDICES.ELT] = newELT;
+      reassignmentCount++;
+      reassignments.push({
+        row: index + 2, // +2 because: +1 for header, +1 for 0-index
+        oldELT: currentELT,
+        newELT: newELT,
+        department: department
+      });
+    }
+  });
+  
+  // Write updated data back to sheet
+  if (reassignmentCount > 0) {
+    const updatedData = [header, ...rows];
+    const targetRange = rawDataSheet.getRange(1, 1, updatedData.length, updatedData[0].length);
+    targetRange.setValues(updatedData);
+    
+    // Log reassignments
+    Logger.log(`ELT reassignments completed: ${reassignmentCount} rows updated`);
+    reassignments.forEach(r => {
+      Logger.log(`Row ${r.row}: ${r.oldELT} → ${r.newELT} (Dept: ${r.department})`);
+    });
+    
+    SpreadsheetApp.getUi().alert(`ELT reassignments completed.\n${reassignmentCount} rows updated.`);
+  } else {
+    SpreadsheetApp.getUi().alert("No ELT reassignments needed. All values are already correct.");
+  }
+}
 
 /**
  * Generates HR metrics for a given period with optional filters
