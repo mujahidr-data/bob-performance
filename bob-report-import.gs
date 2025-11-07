@@ -50,13 +50,16 @@ function fetchBobReportCSV() {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Bob HR Analytics')
-    .addItem('Fetch Bob Report', 'fetchBobReportCSV')
-    .addSeparator()
-    .addItem('Reassign ELT Values', 'reassignELTValues')
-    .addSeparator()
-    .addItem('Generate HR Metrics', 'generateHRMetrics')
-    .addItem('Create Filter Config Sheet', 'createFilterConfigSheet')
-    .addItem('Update Filter Options', 'updateFilterOptions')
+    // Step 1: Import data
+    .addItem('Step 1: Fetch Bob Report', 'fetchBobReportCSV')
+    // Step 2: Process/clean data
+    .addItem('Step 2: Reassign ELT Values', 'reassignELTValues')
+    // Step 3: Review available filters
+    .addItem('Step 3: Update Filter Options', 'updateFilterOptions')
+    // Step 4: Set up filter selection
+    .addItem('Step 4: Create Filter Config Sheet', 'createFilterConfigSheet')
+    // Step 5: Generate metrics
+    .addItem('Step 5: Generate HR Metrics', 'generateHRMetrics')
     .addToUi();
 }
 
