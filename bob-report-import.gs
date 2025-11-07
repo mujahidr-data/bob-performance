@@ -903,19 +903,28 @@ function generateOverallData() {
   // Overall Data shows entire company data - only time period filters apply
   let filters = {}; // No site/ELT/department filters for Overall Data
   let timePeriodFilter = null;
+  let aggregationType = null; // 'halves' or 'quarters' when Year + Halves/Quarters selected
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
     // Get time period filters only (for Overall Data)
     const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
     const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
+    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarters filter
     
     if (yearFilter) {
-      timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
-    } else if (halvesFilter) {
-      timePeriodFilter = { type: 'halves', value: parseInt(halvesFilter.replace("H", ""), 10) };
-    } else if (quarterFilter) {
-      timePeriodFilter = { type: 'quarter', value: parseInt(quarterFilter.replace("Q", ""), 10) };
+      const year = parseInt(yearFilter, 10);
+      if (halvesFilter === "Halves") {
+        // Year + Halves: aggregate by halves (show H1 and H2)
+        timePeriodFilter = { type: 'year', value: year };
+        aggregationType = { type: 'halves' }; // No specific value = show both
+      } else if (quarterFilter === "Quarters") {
+        // Year + Quarters: aggregate by quarters (show Q1-Q4)
+        timePeriodFilter = { type: 'year', value: year };
+        aggregationType = { type: 'quarters' }; // No specific value = show all
+      } else {
+        // Year only: show monthly
+        timePeriodFilter = { type: 'year', value: year };
+      }
     }
   }
   
@@ -973,6 +982,58 @@ function generateOverallData() {
     Logger.log(`WARNING: No periods match the time period filter!`);
   }
   
+  // If aggregation is requested (Year + Halves/Quarters), aggregate periods
+  let aggregatedPeriods = [];
+  if (aggregationType && timePeriodFilter && timePeriodFilter.type === 'year') {
+    if (aggregationType.type === 'halves') {
+      // Aggregate by halves: show both H1 and H2
+      const h1Periods = periods.filter(p => p.half === 1);
+      const h2Periods = periods.filter(p => p.half === 2);
+      
+      if (h1Periods.length > 0) {
+        const h1Start = h1Periods[0].start;
+        const h1End = h1Periods[h1Periods.length - 1].end;
+        aggregatedPeriods.push({
+          start: h1Start,
+          end: h1End,
+          label: `H1 ${timePeriodFilter.value}`,
+          periods: h1Periods
+        });
+      }
+      
+      if (h2Periods.length > 0) {
+        const h2Start = h2Periods[0].start;
+        const h2End = h2Periods[h2Periods.length - 1].end;
+        aggregatedPeriods.push({
+          start: h2Start,
+          end: h2End,
+          label: `H2 ${timePeriodFilter.value}`,
+          periods: h2Periods
+        });
+      }
+    } else if (aggregationType.type === 'quarters') {
+      // Aggregate by quarters: show all Q1-Q4
+      for (let q = 1; q <= 4; q++) {
+        const qPeriods = periods.filter(p => p.quarter === q);
+        if (qPeriods.length > 0) {
+          const qStart = qPeriods[0].start;
+          const qEnd = qPeriods[qPeriods.length - 1].end;
+          aggregatedPeriods.push({
+            start: qStart,
+            end: qEnd,
+            label: `Q${q} ${timePeriodFilter.value}`,
+            periods: qPeriods
+          });
+        }
+      }
+    }
+    
+    if (aggregatedPeriods.length > 0) {
+      periods = aggregatedPeriods;
+      Logger.log(`Aggregated into ${periods.length} periods`);
+    }
+  }
+  
   // Write headers (only set formatting if it's a new sheet)
   const headers = [
     "Period",
@@ -999,7 +1060,63 @@ function generateOverallData() {
   const values = [];
   for (let i = 0; i < periods.length; i++) {
     try {
-      const metrics = calculateHRMetrics(periods[i].start, periods[i].end, filters);
+      let metrics;
+      if (periods[i].periods) {
+        // Aggregated period: calculate metrics across all months in the period
+        // Opening HC = opening HC of first month
+        // Closing HC = closing HC of last month
+        // Hires/Terms = sum across all months
+        const firstPeriod = periods[i].periods[0];
+        const lastPeriod = periods[i].periods[periods[i].periods.length - 1];
+        
+        const firstMetrics = calculateHRMetrics(firstPeriod.start, firstPeriod.end, filters);
+        const lastMetrics = calculateHRMetrics(lastPeriod.start, lastPeriod.end, filters);
+        
+        // Sum up hires and terms across all months
+        let totalHires = 0;
+        let totalTerms = 0;
+        let totalVoluntary = 0;
+        let totalInvoluntary = 0;
+        let totalRegrettable = 0;
+        
+        periods[i].periods.forEach(period => {
+          const periodMetrics = calculateHRMetrics(period.start, period.end, filters);
+          totalHires += periodMetrics.hires;
+          totalTerms += periodMetrics.terms;
+          totalVoluntary += periodMetrics.voluntaryTerms;
+          totalInvoluntary += periodMetrics.involuntaryTerms;
+          totalRegrettable += periodMetrics.regrettableTerms;
+        });
+        
+        // Opening HC = first month's opening, Closing HC = last month's closing
+        const openingHC = firstMetrics.openingHC;
+        const closingHC = lastMetrics.closingHC;
+        const avgHC = (openingHC + closingHC) / 2;
+        
+        // Calculate rates
+        const attrition = avgHC > 0 ? (totalVoluntary / avgHC) : 0;
+        const retention = openingHC > 0 ? ((openingHC - totalTerms) / openingHC) : 0;
+        const turnover = avgHC > 0 ? (totalTerms / avgHC) : 0;
+        const regrettableTurnover = avgHC > 0 ? (totalRegrettable / avgHC) : 0;
+        
+        metrics = {
+          openingHC: openingHC,
+          closingHC: closingHC,
+          hires: totalHires,
+          terms: totalTerms,
+          voluntaryTerms: totalVoluntary,
+          involuntaryTerms: totalInvoluntary,
+          regrettableTerms: totalRegrettable,
+          attrition: Math.round(attrition * 10000) / 10000,
+          retention: Math.round(retention * 10000) / 10000,
+          turnover: Math.round(turnover * 10000) / 10000,
+          regrettableTurnover: Math.round(regrettableTurnover * 10000) / 10000
+        };
+      } else {
+        // Regular period: calculate normally
+        metrics = calculateHRMetrics(periods[i].start, periods[i].end, filters);
+      }
+      
       values.push([
         periods[i].label,
         metrics.openingHC,
@@ -1179,7 +1296,7 @@ function createFilterConfigSheet() {
   
   configSheet.getRange(5, 1).setValue("Year:");
   configSheet.getRange(6, 1).setValue("Halves:");
-  configSheet.getRange(7, 1).setValue("Quarter:");
+  configSheet.getRange(7, 1).setValue("Quarters:");
   
   // Year dropdown (2024, 2025, 2026, etc.)
   const currentYear = new Date().getFullYear();
@@ -1196,21 +1313,21 @@ function createFilterConfigSheet() {
   configSheet.getRange(5, 3).setFontStyle("italic");
   configSheet.getRange(5, 3).setFontColor("#666666");
   
-  // Halves dropdown (H1 = Jan-Jun, H2 = Jul-Dec)
+  // Halves dropdown - works with Year filter to aggregate by halves (H1 and H2)
   const halvesRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(["", "H1", "H2"], true)
+    .requireValueInList(["", "Halves"], true)
     .build();
   configSheet.getRange(6, 2).setDataValidation(halvesRule);
-  configSheet.getRange(6, 3).setValue("(e.g., H1 or H2)");
+  configSheet.getRange(6, 3).setValue("(Select Year + Halves to show H1 & H2 aggregated)");
   configSheet.getRange(6, 3).setFontStyle("italic");
   configSheet.getRange(6, 3).setFontColor("#666666");
   
-  // Quarter dropdown
+  // Quarters dropdown - works with Year filter to aggregate by quarters (Q1-Q4)
   const quarterRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(["", "Q1", "Q2", "Q3", "Q4"], true)
+    .requireValueInList(["", "Quarters"], true)
     .build();
   configSheet.getRange(7, 2).setDataValidation(quarterRule);
-  configSheet.getRange(7, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
+  configSheet.getRange(7, 3).setValue("(Select Year + Quarters to show Q1-Q4 aggregated)");
   configSheet.getRange(7, 3).setFontStyle("italic");
   configSheet.getRange(7, 3).setFontColor("#666666");
   
@@ -1219,8 +1336,38 @@ function createFilterConfigSheet() {
   configSheet.getRange(9, 1).setFontWeight("bold");
   configSheet.getRange(10, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
   configSheet.getRange(11, 1).setValue("2. Time Period filter applies to: Overall Data, Headcount Metrics & ELT Metrics");
-  configSheet.getRange(12, 1).setValue("3. Time Period: Select Year OR Halves OR Quarter");
-  configSheet.getRange(13, 1).setValue("4. Run 'Generate Overall Data', 'Generate Headcount Metrics', or 'Generate ELT Metrics' from menu");
+  configSheet.getRange(12, 1).setValue("3. For aggregated periods: Select Year + Halves (H1/H2) OR Year + Quarters (Q1-Q4)");
+  configSheet.getRange(13, 1).setValue("4. Halves/Quarters aggregate all months in that period into one column");
+  configSheet.getRange(14, 1).setValue("5. Run 'Generate Overall Data', 'Generate Headcount Metrics', or 'Generate ELT Metrics' from menu");
+  
+  // Add separate filter section for Termination Reasons
+  configSheet.getRange(16, 1).setValue("Filter for 'Termination Reasons' (separate from above):");
+  configSheet.getRange(16, 1).setFontWeight("bold");
+  configSheet.getRange(16, 1).setFontSize(11);
+  
+  configSheet.getRange(17, 1).setValue("Year:");
+  configSheet.getRange(18, 1).setValue("Period Type:");
+  
+  // Year dropdown for Termination Reasons
+  const termYearRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([""].concat(years), true)
+    .build();
+  configSheet.getRange(17, 2).setDataValidation(termYearRule);
+  configSheet.getRange(17, 3).setValue("(Select year for termination reasons)");
+  configSheet.getRange(17, 3).setFontStyle("italic");
+  configSheet.getRange(17, 3).setFontColor("#666666");
+  
+  // Period Type dropdown: Halves or Quarters
+  const periodTypeRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["", "Halves", "Quarters"], true)
+    .build();
+  configSheet.getRange(18, 2).setDataValidation(periodTypeRule);
+  configSheet.getRange(18, 3).setValue("(Select Halves or Quarters to toggle)");
+  configSheet.getRange(18, 3).setFontStyle("italic");
+  configSheet.getRange(18, 3).setFontColor("#666666");
+  
+  configSheet.getRange(20, 1).setValue("6. For Termination Reasons: Select Year + Period Type (Halves or Quarters)");
+  configSheet.getRange(21, 1).setValue("7. Period Type toggles between H1/H2 (Halves) or Q1-Q4 (Quarters)");
   
   configSheet.autoResizeColumns(1, 3);
   
@@ -1329,26 +1476,77 @@ function generateHeadcountMetrics() {
   
   // Apply time period filters from FilterConfig
   let periods = allPeriods;
+  let aggregationType = null;
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
     const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
     const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
+    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarters filter
     
     if (yearFilter) {
-      // Filter by year
-      const filterYear = parseInt(yearFilter, 10);
-      periods = periods.filter(p => p.year === filterYear);
-    } else if (halvesFilter) {
-      // Filter by halves (H1 = Jan-Jun, H2 = Jul-Dec)
-      const halfNum = parseInt(halvesFilter.replace("H", ""), 10);
-      periods = periods.filter(p => p.half === halfNum);
-    } else if (quarterFilter) {
-      // Filter by quarter (Q1, Q2, Q3, Q4)
-      const quarterNum = parseInt(quarterFilter.replace("Q", ""), 10);
-      periods = periods.filter(p => p.quarter === quarterNum);
+      const year = parseInt(yearFilter, 10);
+      if (halvesFilter === "Halves") {
+        // Year + Halves: aggregate by halves
+        periods = periods.filter(p => p.year === year);
+        aggregationType = { type: 'halves' };
+      } else if (quarterFilter === "Quarters") {
+        // Year + Quarters: aggregate by quarters
+        periods = periods.filter(p => p.year === year);
+        aggregationType = { type: 'quarters' };
+      } else {
+        // Year only: show monthly
+        periods = periods.filter(p => p.year === year);
+      }
     }
-    // If no time period filter, use all periods
+  }
+  
+  // Aggregate periods if needed
+  let yearForLabel = null;
+  if (filterConfigSheet) {
+    const yearFilter = filterConfigSheet.getRange(5, 2).getValue();
+    if (yearFilter) yearForLabel = parseInt(yearFilter, 10);
+  }
+  
+  if (aggregationType) {
+    let aggregatedPeriods = [];
+    if (aggregationType.type === 'halves') {
+      const h1Periods = periods.filter(p => p.half === 1);
+      const h2Periods = periods.filter(p => p.half === 2);
+      
+      if (h1Periods.length > 0) {
+        aggregatedPeriods.push({
+          start: h1Periods[0].start,
+          end: h1Periods[h1Periods.length - 1].end,
+          label: `H1 ${yearForLabel || ''}`,
+          periods: h1Periods
+        });
+      }
+      
+      if (h2Periods.length > 0) {
+        aggregatedPeriods.push({
+          start: h2Periods[0].start,
+          end: h2Periods[h2Periods.length - 1].end,
+          label: `H2 ${yearForLabel || ''}`,
+          periods: h2Periods
+        });
+      }
+    } else if (aggregationType.type === 'quarters') {
+      for (let q = 1; q <= 4; q++) {
+        const qPeriods = periods.filter(p => p.quarter === q);
+        if (qPeriods.length > 0) {
+          aggregatedPeriods.push({
+            start: qPeriods[0].start,
+            end: qPeriods[qPeriods.length - 1].end,
+            label: `Q${q} ${yearForLabel || ''}`,
+            periods: qPeriods
+          });
+        }
+      }
+    }
+    
+    if (aggregatedPeriods.length > 0) {
+      periods = aggregatedPeriods;
+    }
   }
   
   // Headcount Metrics is structured by site, so no additional filters needed
@@ -1383,7 +1581,55 @@ function generateHeadcountMetrics() {
         try {
           // Headcount Metrics is structured by site, so only filter by site
           const periodFilters = { site: site };
-          metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
+          
+          // If aggregated period, calculate aggregated metrics
+          if (period.periods) {
+            const firstPeriod = period.periods[0];
+            const lastPeriod = period.periods[period.periods.length - 1];
+            
+            const firstMetrics = calculateHRMetrics(firstPeriod.start, firstPeriod.end, periodFilters);
+            const lastMetrics = calculateHRMetrics(lastPeriod.start, lastPeriod.end, periodFilters);
+            
+            let totalHires = 0;
+            let totalTerms = 0;
+            let totalVoluntary = 0;
+            let totalInvoluntary = 0;
+            let totalRegrettable = 0;
+            
+            period.periods.forEach(p => {
+              const pMetrics = calculateHRMetrics(p.start, p.end, periodFilters);
+              totalHires += pMetrics.hires;
+              totalTerms += pMetrics.terms;
+              totalVoluntary += pMetrics.voluntaryTerms;
+              totalInvoluntary += pMetrics.involuntaryTerms;
+              totalRegrettable += pMetrics.regrettableTerms;
+            });
+            
+            const openingHC = firstMetrics.openingHC;
+            const closingHC = lastMetrics.closingHC;
+            const avgHC = (openingHC + closingHC) / 2;
+            
+            const attrition = avgHC > 0 ? (totalVoluntary / avgHC) : 0;
+            const retention = openingHC > 0 ? ((openingHC - totalTerms) / openingHC) : 0;
+            const turnover = avgHC > 0 ? (totalTerms / avgHC) : 0;
+            const regrettableTurnover = avgHC > 0 ? (totalRegrettable / avgHC) : 0;
+            
+            metricsCache[cacheKey] = {
+              openingHC: openingHC,
+              closingHC: closingHC,
+              hires: totalHires,
+              terms: totalTerms,
+              voluntaryTerms: totalVoluntary,
+              involuntaryTerms: totalInvoluntary,
+              regrettableTerms: totalRegrettable,
+              attrition: Math.round(attrition * 10000) / 10000,
+              retention: Math.round(retention * 10000) / 10000,
+              turnover: Math.round(turnover * 10000) / 10000,
+              regrettableTurnover: Math.round(regrettableTurnover * 10000) / 10000
+            };
+          } else {
+            metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
+          }
         } catch (error) {
           Logger.log(`Error calculating metrics for ${site} in ${period.label}: ${error.message}`);
           metricsCache[cacheKey] = null;
@@ -1546,21 +1792,76 @@ function generateELTMetrics() {
   
   // Apply time period filters from FilterConfig
   let periods = allPeriods;
+  let aggregationType = null;
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
     const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
     const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
+    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarters filter
     
     if (yearFilter) {
-      const filterYear = parseInt(yearFilter, 10);
-      periods = periods.filter(p => p.year === filterYear);
-    } else if (halvesFilter) {
-      const halfNum = parseInt(halvesFilter.replace("H", ""), 10);
-      periods = periods.filter(p => p.half === halfNum);
-    } else if (quarterFilter) {
-      const quarterNum = parseInt(quarterFilter.replace("Q", ""), 10);
-      periods = periods.filter(p => p.quarter === quarterNum);
+      const year = parseInt(yearFilter, 10);
+      if (halvesFilter === "Halves") {
+        // Year + Halves: aggregate by halves
+        periods = periods.filter(p => p.year === year);
+        aggregationType = { type: 'halves' };
+      } else if (quarterFilter === "Quarters") {
+        // Year + Quarters: aggregate by quarters
+        periods = periods.filter(p => p.year === year);
+        aggregationType = { type: 'quarters' };
+      } else {
+        // Year only: show monthly
+        periods = periods.filter(p => p.year === year);
+      }
+    }
+  }
+  
+  // Aggregate periods if needed
+  let yearForLabel = null;
+  if (filterConfigSheet) {
+    const yearFilter = filterConfigSheet.getRange(5, 2).getValue();
+    if (yearFilter) yearForLabel = parseInt(yearFilter, 10);
+  }
+  
+  if (aggregationType) {
+    let aggregatedPeriods = [];
+    if (aggregationType.type === 'halves') {
+      const h1Periods = periods.filter(p => p.half === 1);
+      const h2Periods = periods.filter(p => p.half === 2);
+      
+      if (h1Periods.length > 0) {
+        aggregatedPeriods.push({
+          start: h1Periods[0].start,
+          end: h1Periods[h1Periods.length - 1].end,
+          label: `H1 ${yearForLabel || ''}`,
+          periods: h1Periods
+        });
+      }
+      
+      if (h2Periods.length > 0) {
+        aggregatedPeriods.push({
+          start: h2Periods[0].start,
+          end: h2Periods[h2Periods.length - 1].end,
+          label: `H2 ${yearForLabel || ''}`,
+          periods: h2Periods
+        });
+      }
+    } else if (aggregationType.type === 'quarters') {
+      for (let q = 1; q <= 4; q++) {
+        const qPeriods = periods.filter(p => p.quarter === q);
+        if (qPeriods.length > 0) {
+          aggregatedPeriods.push({
+            start: qPeriods[0].start,
+            end: qPeriods[qPeriods.length - 1].end,
+            label: `Q${q} ${yearForLabel || ''}`,
+            periods: qPeriods
+          });
+        }
+      }
+    }
+    
+    if (aggregatedPeriods.length > 0) {
+      periods = aggregatedPeriods;
     }
   }
   
@@ -1592,7 +1893,55 @@ function generateELTMetrics() {
         try {
           // ELT Metrics is structured by ELT
           const periodFilters = { elt: elt };
-          metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
+          
+          // If aggregated period, calculate aggregated metrics
+          if (period.periods) {
+            const firstPeriod = period.periods[0];
+            const lastPeriod = period.periods[period.periods.length - 1];
+            
+            const firstMetrics = calculateHRMetrics(firstPeriod.start, firstPeriod.end, periodFilters);
+            const lastMetrics = calculateHRMetrics(lastPeriod.start, lastPeriod.end, periodFilters);
+            
+            let totalHires = 0;
+            let totalTerms = 0;
+            let totalVoluntary = 0;
+            let totalInvoluntary = 0;
+            let totalRegrettable = 0;
+            
+            period.periods.forEach(p => {
+              const pMetrics = calculateHRMetrics(p.start, p.end, periodFilters);
+              totalHires += pMetrics.hires;
+              totalTerms += pMetrics.terms;
+              totalVoluntary += pMetrics.voluntaryTerms;
+              totalInvoluntary += pMetrics.involuntaryTerms;
+              totalRegrettable += pMetrics.regrettableTerms;
+            });
+            
+            const openingHC = firstMetrics.openingHC;
+            const closingHC = lastMetrics.closingHC;
+            const avgHC = (openingHC + closingHC) / 2;
+            
+            const attrition = avgHC > 0 ? (totalVoluntary / avgHC) : 0;
+            const retention = openingHC > 0 ? ((openingHC - totalTerms) / openingHC) : 0;
+            const turnover = avgHC > 0 ? (totalTerms / avgHC) : 0;
+            const regrettableTurnover = avgHC > 0 ? (totalRegrettable / avgHC) : 0;
+            
+            metricsCache[cacheKey] = {
+              openingHC: openingHC,
+              closingHC: closingHC,
+              hires: totalHires,
+              terms: totalTerms,
+              voluntaryTerms: totalVoluntary,
+              involuntaryTerms: totalInvoluntary,
+              regrettableTerms: totalRegrettable,
+              attrition: Math.round(attrition * 10000) / 10000,
+              retention: Math.round(retention * 10000) / 10000,
+              turnover: Math.round(turnover * 10000) / 10000,
+              regrettableTurnover: Math.round(regrettableTurnover * 10000) / 10000
+            };
+          } else {
+            metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
+          }
         } catch (error) {
           Logger.log(`Error calculating metrics for ${elt} in ${period.label}: ${error.message}`);
           metricsCache[cacheKey] = null;
@@ -2383,19 +2732,25 @@ function generateTerminationReasonsTable() {
   // No filters needed - we'll show breakdowns by Site and ELT, plus overall
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   
-  // Get time period filters
+  // Get time period filters for Termination Reasons (separate section)
   let timePeriodFilter = null;
   if (filterConfigSheet) {
-    const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
+    // Use Termination Reasons filter section (rows 17-18)
+    const termYearFilter = filterConfigSheet.getRange(17, 2).getValue(); // Year filter for Termination Reasons
+    const periodTypeFilter = filterConfigSheet.getRange(18, 2).getValue(); // Period Type: Halves or Quarters
     
-    if (yearFilter) {
-      timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
-    } else if (halvesFilter) {
-      timePeriodFilter = { type: 'halves', value: parseInt(halvesFilter.replace("H", ""), 10) };
-    } else if (quarterFilter) {
-      timePeriodFilter = { type: 'quarter', value: parseInt(quarterFilter.replace("Q", ""), 10) };
+    if (termYearFilter) {
+      const year = parseInt(termYearFilter, 10);
+      if (periodTypeFilter === "Halves") {
+        // Year + Halves: filter by both H1 and H2 (show both)
+        timePeriodFilter = { type: 'year_halves', value: year };
+      } else if (periodTypeFilter === "Quarters") {
+        // Year + Quarters: filter by all quarters (show Q1-Q4)
+        timePeriodFilter = { type: 'year_quarters', value: year };
+      } else {
+        // Year only: show all months in year
+        timePeriodFilter = { type: 'year', value: year };
+      }
     }
   }
   
@@ -2428,6 +2783,12 @@ function generateTerminationReasonsTable() {
     const termHalf = termMonth < 6 ? 1 : 2; // H1 = Jan-Jun (months 0-5), H2 = Jul-Dec (months 6-11)
     
     if (timePeriodFilter.type === 'year') {
+      return termYear === timePeriodFilter.value;
+    } else if (timePeriodFilter.type === 'year_halves') {
+      // Year + Halves: include all months in the year (both H1 and H2)
+      return termYear === timePeriodFilter.value;
+    } else if (timePeriodFilter.type === 'year_quarters') {
+      // Year + Quarters: include all months in the year (all quarters)
       return termYear === timePeriodFilter.value;
     } else if (timePeriodFilter.type === 'halves') {
       return termHalf === timePeriodFilter.value;
@@ -2509,6 +2870,10 @@ function generateTerminationReasonsTable() {
     const filterInfo = ["Filters Applied:"];
     if (timePeriodFilter.type === 'year') {
       filterInfo.push(`Year: ${timePeriodFilter.value}`);
+    } else if (timePeriodFilter.type === 'year_halves') {
+      filterInfo.push(`Year: ${timePeriodFilter.value}, Period Type: Halves (H1/H2)`);
+    } else if (timePeriodFilter.type === 'year_quarters') {
+      filterInfo.push(`Year: ${timePeriodFilter.value}, Period Type: Quarters (Q1-Q4)`);
     } else if (timePeriodFilter.type === 'halves') {
       filterInfo.push(`Halves: H${timePeriodFilter.value}`);
     } else if (timePeriodFilter.type === 'quarter') {
