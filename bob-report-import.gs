@@ -1384,6 +1384,14 @@ function createFilterConfigSheet() {
   
   configSheet.autoResizeColumns(1, 3);
   
+  // Set column B width and center align filter values
+  configSheet.setColumnWidth(2, 250); // Set column B width to 250 pixels
+  // Center align all filter value cells in column B (rows 5, 6, 7, 17, 18)
+  const filterValueRows = [5, 6, 7, 17, 18];
+  filterValueRows.forEach(row => {
+    configSheet.getRange(row, 2).setHorizontalAlignment("center");
+  });
+  
   SpreadsheetApp.getUi().alert("FilterConfig sheet created. Select your filters and run the appropriate generate function.");
 }
 
@@ -3096,6 +3104,9 @@ function generateTerminationsReasonsDrilldown() {
     // On existing sheets, preserve user formatting but ensure columns are visible
     // Only auto-resize if columns are too narrow (optional - can be removed if you want to preserve all formatting)
   }
+  
+  // Turn off gridlines for the sheet (apply to both new and existing sheets)
+  termReasonsSheet.setGridlinesVisible(false);
   
   SpreadsheetApp.getUi().alert(`Terminations Reasons Drilldown generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
   
