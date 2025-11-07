@@ -511,11 +511,14 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   const involuntaryTerms = involuntaryTermNames.size;
   
   // Calculate rates (return as decimals, sheet will format as percentage)
-  // Original formulas: attrition = terms / avgHC, retention = (openingHC - terms) / openingHC, turnover = terms / avgHC
+  // Original formulas:
+  // - attrition = F4 / ((B4 + C4) / 2) where F4 = Voluntary Terms
+  // - retention = (B4 - E4) / B4 where E4 = Terms
+  // - turnover = E4 / ((B4 + C4) / 2) where E4 = Terms
   const avgHC = (openingHC + closingHC) / 2;
-  const attrition = avgHC > 0 ? (terms / avgHC) : 0;
-  const retention = openingHC > 0 ? ((openingHC - terms) / openingHC) : 0;
-  const turnover = avgHC > 0 ? (terms / avgHC) : 0;
+  const attrition = avgHC > 0 ? (voluntaryTerms / avgHC) : 0;  // Attrition = Voluntary Terms / Avg HC
+  const retention = openingHC > 0 ? ((openingHC - terms) / openingHC) : 0;  // Retention = (Opening HC - Terms) / Opening HC
+  const turnover = avgHC > 0 ? (terms / avgHC) : 0;  // Turnover = Total Terms / Avg HC
   
   return {
     openingHC,
