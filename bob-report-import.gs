@@ -2060,15 +2060,16 @@ function generateJobLevelHeadcount() {
     
     // Chart 1: Overall Job Level Headcount (Column Chart)
     if (overallChart) {
-      // Update existing chart - preserve position and formatting
+      // Update existing chart - ONLY update data range, preserve all formatting
       try {
         Logger.log(`Updating existing overall chart - current range: ${overallChart.getRanges()[0] ? overallChart.getRanges()[0].getA1Notation() : 'N/A'}, new range: ${overallChartRange.getA1Notation()}`);
+        // Only modify the range, don't touch any other options to preserve user formatting
         const updatedChart = overallChart.modify()
           .clearRanges()
           .addRange(overallChartRange)
           .build();
         jobLevelSheet.updateChart(updatedChart);
-        Logger.log("Overall chart updated successfully (not recreated)");
+        Logger.log("Overall chart updated successfully (formatting preserved)");
       } catch (e) {
         Logger.log(`ERROR updating overall chart: ${e.message}`);
         Logger.log(`Stack trace: ${e.stack}`);
@@ -2106,29 +2107,35 @@ function generateJobLevelHeadcount() {
           .setOption('legend.position', 'none')
           .setOption('hAxis.title', 'Job Level')
           .setOption('vAxis.title', 'Headcount')
+          .setOption('vAxis.textStyle.color', '#FFFFFF') // White font to hide axis values
+          .setOption('vAxis.gridlines.count', 0) // Turn off major gridlines
+          .setOption('vAxis.minorGridlines.count', 0) // Turn off minor gridlines
+          .setOption('dataLabelPosition', 'out') // Data labels outside end
+          .setOption('useFirstColumnAsDomain', true) // Use Col A as labels
           .setOption('width', 600)
           .setOption('height', 400)
           .build();
         jobLevelSheet.insertChart(newOverallChart);
-        Logger.log("New overall chart created");
+        Logger.log("New overall chart created with formatting");
       }
     }
     
     // Chart 2: Site Breakdown (Stacked Column Chart)
     // Exclude the "Total" column - only include Job Level + Site columns
     if (siteChart) {
-      // Update existing chart - preserve position and formatting
+      // Update existing chart - ONLY update data range, preserve all formatting
       try {
         const updatedChart = siteChart.modify()
           .clearRanges()
           .addRange(siteChartRange)
           .build();
         jobLevelSheet.updateChart(updatedChart);
+        Logger.log("Site chart updated (formatting preserved)");
       } catch (e) {
         Logger.log(`Error updating site chart: ${e.message}`);
       }
     } else {
-      // Create new chart
+      // Create new chart with formatting
       const newSiteChart = jobLevelSheet.newChart()
         .setChartType(Charts.ChartType.COLUMN)
         .addRange(siteChartRange)
@@ -2138,23 +2145,29 @@ function generateJobLevelHeadcount() {
         .setOption('legend.position', 'right')
         .setOption('hAxis.title', 'Job Level')
         .setOption('vAxis.title', 'Headcount')
+        .setOption('vAxis.textStyle.color', '#FFFFFF') // White font to hide axis values
+        .setOption('vAxis.gridlines.count', 0) // Turn off major gridlines
+        .setOption('vAxis.minorGridlines.count', 0) // Turn off minor gridlines
+        .setOption('dataLabelPosition', 'out') // Data labels outside end
+        .setOption('useFirstColumnAsDomain', true) // Use Col A as labels
         .setOption('width', 800)
         .setOption('height', 400)
         .build();
       jobLevelSheet.insertChart(newSiteChart);
+      Logger.log("New site chart created with formatting");
     }
     
     // Chart 3: ELT Breakdown (Stacked Column Chart) - Interactive with dropdown filter
     // The chart references the filtered data table which updates automatically based on dropdown
     if (eltChart) {
-      // Update existing chart to use filtered data range - DO NOT recreate
+      // Update existing chart - ONLY update data range, preserve all formatting
       try {
         const updatedChart = eltChart.modify()
           .clearRanges()
           .addRange(filteredChartRange)
           .build();
         jobLevelSheet.updateChart(updatedChart);
-        Logger.log("ELT chart updated (not recreated)");
+        Logger.log("ELT chart updated (formatting preserved)");
       } catch (e) {
         Logger.log(`Error updating ELT chart: ${e.message}`);
       }
@@ -2170,10 +2183,16 @@ function generateJobLevelHeadcount() {
         .setOption('legend.position', 'right')
         .setOption('hAxis.title', 'Job Level')
         .setOption('vAxis.title', 'Headcount')
+        .setOption('vAxis.textStyle.color', '#FFFFFF') // White font to hide axis values
+        .setOption('vAxis.gridlines.count', 0) // Turn off major gridlines
+        .setOption('vAxis.minorGridlines.count', 0) // Turn off minor gridlines
+        .setOption('dataLabelPosition', 'out') // Data labels outside end
+        .setOption('useFirstColumnAsDomain', true) // Use Col A as labels
         .setOption('width', 800)
         .setOption('height', 400)
         .build();
       jobLevelSheet.insertChart(newELTChart);
+      Logger.log("New ELT chart created with formatting");
     }
     
     // Add instruction text
