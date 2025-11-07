@@ -1455,43 +1455,92 @@ function generateJobLevelHeadcount() {
     jobLevelSheet.autoResizeColumns(1, Math.max(2, siteHeaders.length));
   }
   
-  // Create charts
+  // Create or update charts
   try {
+    const existingCharts = jobLevelSheet.getCharts();
+    let overallChart = null;
+    let siteChart = null;
+    
+    // Find existing charts by title
+    existingCharts.forEach(chart => {
+      try {
+        const options = chart.getOptions();
+        const title = options ? options.title : null;
+        if (title === 'Job Level Headcount (Overall)') {
+          overallChart = chart;
+        } else if (title === 'Job Level Headcount by Site') {
+          siteChart = chart;
+        }
+      } catch (e) {
+        // Skip charts that can't be read
+        Logger.log(`Error reading chart: ${e.message}`);
+      }
+    });
+    
     // Chart 1: Overall Job Level Headcount (Column Chart)
     const overallChartRange = jobLevelSheet.getRange(1, 1, overallDataRows.length + 1, 2);
-    const overallChart = jobLevelSheet.newChart()
-      .setChartType(Charts.ChartType.COLUMN)
-      .addRange(overallChartRange)
-      .setPosition(overallDataRows.length + 2, 4, 0, 0)
-      .setOption('title', 'Job Level Headcount (Overall)')
-      .setOption('legend.position', 'none')
-      .setOption('hAxis.title', 'Job Level')
-      .setOption('vAxis.title', 'Headcount')
-      .setOption('width', 600)
-      .setOption('height', 400)
-      .build();
-    jobLevelSheet.insertChart(overallChart);
+    
+    if (overallChart) {
+      // Update existing chart - preserve position and formatting
+      try {
+        const updatedChart = overallChart.modify()
+          .clearRanges()
+          .addRange(overallChartRange)
+          .build();
+        jobLevelSheet.updateChart(updatedChart);
+      } catch (e) {
+        Logger.log(`Error updating overall chart: ${e.message}`);
+      }
+    } else {
+      // Create new chart
+      const newOverallChart = jobLevelSheet.newChart()
+        .setChartType(Charts.ChartType.COLUMN)
+        .addRange(overallChartRange)
+        .setPosition(overallDataRows.length + 2, 4, 0, 0)
+        .setOption('title', 'Job Level Headcount (Overall)')
+        .setOption('legend.position', 'none')
+        .setOption('hAxis.title', 'Job Level')
+        .setOption('vAxis.title', 'Headcount')
+        .setOption('width', 600)
+        .setOption('height', 400)
+        .build();
+      jobLevelSheet.insertChart(newOverallChart);
+    }
     
     // Chart 2: Site Breakdown (Stacked Column Chart)
     // Exclude the "Total" column - only include Job Level + Site columns
-    // Range: Job Level (col 1) + all sites (cols 2 to sortedSites.length + 1), excluding Total
     const siteChartNumCols = sortedSites.length + 1; // Job Level + sites (excluding Total)
     const siteChartRange = jobLevelSheet.getRange(siteBreakdownStartRow, 1, siteBreakdownRows.length + 1, siteChartNumCols);
-    const siteChart = jobLevelSheet.newChart()
-      .setChartType(Charts.ChartType.COLUMN)
-      .addRange(siteChartRange)
-      .setPosition(siteBreakdownStartRow + siteBreakdownRows.length + 2, 4, 0, 0)
-      .setOption('title', 'Job Level Headcount by Site')
-      .setOption('isStacked', true)
-      .setOption('legend.position', 'right')
-      .setOption('hAxis.title', 'Job Level')
-      .setOption('vAxis.title', 'Headcount')
-      .setOption('width', 800)
-      .setOption('height', 400)
-      .build();
-    jobLevelSheet.insertChart(siteChart);
+    
+    if (siteChart) {
+      // Update existing chart - preserve position and formatting
+      try {
+        const updatedChart = siteChart.modify()
+          .clearRanges()
+          .addRange(siteChartRange)
+          .build();
+        jobLevelSheet.updateChart(updatedChart);
+      } catch (e) {
+        Logger.log(`Error updating site chart: ${e.message}`);
+      }
+    } else {
+      // Create new chart
+      const newSiteChart = jobLevelSheet.newChart()
+        .setChartType(Charts.ChartType.COLUMN)
+        .addRange(siteChartRange)
+        .setPosition(siteBreakdownStartRow + siteBreakdownRows.length + 2, 4, 0, 0)
+        .setOption('title', 'Job Level Headcount by Site')
+        .setOption('isStacked', true)
+        .setOption('legend.position', 'right')
+        .setOption('hAxis.title', 'Job Level')
+        .setOption('vAxis.title', 'Headcount')
+        .setOption('width', 800)
+        .setOption('height', 400)
+        .build();
+      jobLevelSheet.insertChart(newSiteChart);
+    }
   } catch (e) {
-    Logger.log(`Error creating charts: ${e.message}`);
+    Logger.log(`Error creating/updating charts: ${e.message}`);
     // Charts are optional, continue even if they fail
   }
   
