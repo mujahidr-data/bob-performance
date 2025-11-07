@@ -338,16 +338,39 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   const header = data[0];
   const rows = data.slice(1);
   
-  // Apply filters
+  // Apply filters (with trimming and normalization for robust matching)
   let filteredRows = rows;
+  const initialRowCount = filteredRows.length;
+  
   if (filters.site) {
-    filteredRows = filteredRows.filter(row => row[COLUMN_INDICES.SITE] === filters.site);
+    const filterSite = String(filters.site).trim();
+    filteredRows = filteredRows.filter(row => {
+      const rowSite = String(row[COLUMN_INDICES.SITE] || "").trim();
+      return rowSite === filterSite;
+    });
+    Logger.log(`After Site filter ("${filterSite}"): ${filteredRows.length} rows (from ${initialRowCount})`);
   }
   if (filters.elt) {
-    filteredRows = filteredRows.filter(row => row[COLUMN_INDICES.ELT] === filters.elt);
+    const filterELT = String(filters.elt).trim();
+    const beforeELT = filteredRows.length;
+    filteredRows = filteredRows.filter(row => {
+      const rowELT = String(row[COLUMN_INDICES.ELT] || "").trim();
+      return rowELT === filterELT;
+    });
+    Logger.log(`After ELT filter ("${filterELT}"): ${filteredRows.length} rows (from ${beforeELT})`);
   }
   if (filters.department) {
-    filteredRows = filteredRows.filter(row => row[COLUMN_INDICES.DEPARTMENT] === filters.department);
+    const filterDept = String(filters.department).trim();
+    const beforeDept = filteredRows.length;
+    filteredRows = filteredRows.filter(row => {
+      const rowDept = String(row[COLUMN_INDICES.DEPARTMENT] || "").trim();
+      return rowDept === filterDept;
+    });
+    Logger.log(`After Department filter ("${filterDept}"): ${filteredRows.length} rows (from ${beforeDept})`);
+  }
+  
+  if (filteredRows.length === 0) {
+    Logger.log(`WARNING: No rows match the filters! Filters: ${JSON.stringify(filters)}`);
   }
   
   // Helper function to parse date and normalize to date only (no time)
@@ -697,9 +720,13 @@ function generateOverallData() {
     const elt = eltCell.getValue();
     const dept = deptCell.getValue();
     
-    if (site) filters.site = site;
-    if (elt) filters.elt = elt;
-    if (dept) filters.department = dept;
+    // Trim and normalize filter values
+    if (site) filters.site = String(site).trim();
+    if (elt) filters.elt = String(elt).trim();
+    if (dept) filters.department = String(dept).trim();
+    
+    // Debug logging
+    Logger.log(`Overall Data - Filters applied: Site="${filters.site || 'none'}", ELT="${filters.elt || 'none'}", Department="${filters.department || 'none'}"`);
     
     // Get time period filters (for Overall Data, these also apply)
     const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
@@ -745,15 +772,27 @@ function generateOverallData() {
   
   // Apply time period filter if specified
   let periods = allPeriods;
+  Logger.log(`Generated ${allPeriods.length} total periods (Jan 2024 to current)`);
+  
   if (timePeriodFilter) {
+    const beforeFilter = periods.length;
     if (timePeriodFilter.type === 'year') {
       periods = allPeriods.filter(p => p.year === timePeriodFilter.value);
+      Logger.log(`After Year filter (${timePeriodFilter.value}): ${periods.length} periods (from ${beforeFilter})`);
     } else if (timePeriodFilter.type === 'quarter') {
       // For quarter, filter by quarter number (works across years)
       periods = allPeriods.filter(p => p.quarter === timePeriodFilter.value);
+      Logger.log(`After Quarter filter (Q${timePeriodFilter.value}): ${periods.length} periods (from ${beforeFilter})`);
     } else if (timePeriodFilter.type === 'month-year') {
       periods = allPeriods.filter(p => timePeriodFilter.value.includes(p.label));
+      Logger.log(`After Month-Year filter: ${periods.length} periods (from ${beforeFilter})`);
     }
+  } else {
+    Logger.log(`No time period filter applied, using all ${periods.length} periods`);
+  }
+  
+  if (periods.length === 0) {
+    Logger.log(`WARNING: No periods match the time period filter!`);
   }
   
   // Write headers (only set formatting if it's a new sheet)
