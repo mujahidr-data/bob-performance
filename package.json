@@ -1,0 +1,23 @@
+{
+  "name": "bob-hr-analytics",
+  "version": "1.0.0",
+  "description": "HR Analytics solution integrating with Bob (hibob.com) for employee data import and metrics calculation",
+  "main": "bob-report-import.gs",
+  "scripts": {
+    "push": "clasp push",
+    "pull": "clasp pull",
+    "open": "clasp open"
+  },
+  "keywords": [
+    "hr-analytics",
+    "google-apps-script",
+    "bob",
+    "hibob",
+    "employee-metrics"
+  ],
+  "author": "CommerceIQ HR Analytics Team",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@google/clasp": "^3.1.1"
+  }
+}
