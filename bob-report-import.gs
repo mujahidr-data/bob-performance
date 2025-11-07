@@ -1976,6 +1976,19 @@ function generateJobLevelHeadcount() {
     // We'll check all charts and try multiple identification methods
     Logger.log(`Checking ${existingCharts.length} existing charts for matches...`);
     
+    // Log all chart titles and ranges for debugging
+    existingCharts.forEach((chart, idx) => {
+      try {
+        const opts = chart.getOptions();
+        const t = opts ? opts.title : null;
+        const ranges = chart.getRanges();
+        const r = ranges && ranges.length > 0 ? ranges[0] : null;
+        Logger.log(`Chart ${idx}: title="${t}", range=${r ? r.getA1Notation() : 'N/A'}, rows=${r ? r.getNumRows() : 'N/A'}, cols=${r ? r.getNumColumns() : 'N/A'}`);
+      } catch (e) {
+        Logger.log(`Chart ${idx}: Error reading - ${e.message}`);
+      }
+    });
+    
     existingCharts.forEach((chart, index) => {
       try {
         const options = chart.getOptions();
@@ -1995,12 +2008,21 @@ function generateJobLevelHeadcount() {
         
         // Try to identify Overall chart
         if (!overallChart) {
-          const matchesTitle = title && (title.includes('Overall') || title.includes('Job Level Headcount (Overall)'));
-          const matchesRange = firstRange && firstRange.getRow() === 1 && firstRange.getColumn() === 1 && firstRange.getNumColumns() === 2;
+          const matchesTitle = title && (
+            title.includes('Overall') || 
+            title.includes('Job Level Headcount (Overall)') ||
+            (title.toLowerCase().includes('overall') && title.toLowerCase().includes('headcount'))
+          );
+          // More flexible range matching: starts at A1 (row 1, col 1) with 2 columns
+          // Don't check exact row count since data might change
+          const matchesRange = firstRange && 
+            firstRange.getRow() === 1 && 
+            firstRange.getColumn() === 1 && 
+            firstRange.getNumColumns() === 2;
           
           if (matchesTitle || matchesRange) {
             overallChart = chart;
-            Logger.log(`Found overall chart (index ${index}) - title: ${title}, range: ${firstRange ? firstRange.getA1Notation() : 'N/A'}`);
+            Logger.log(`Found overall chart (index ${index}) - title: "${title}", range: ${firstRange ? firstRange.getA1Notation() : 'N/A'}, numRows: ${firstRange ? firstRange.getNumRows() : 'N/A'}, numCols: ${firstRange ? firstRange.getNumColumns() : 'N/A'}`);
           }
         }
         
@@ -2040,30 +2062,56 @@ function generateJobLevelHeadcount() {
     if (overallChart) {
       // Update existing chart - preserve position and formatting
       try {
+        Logger.log(`Updating existing overall chart - current range: ${overallChart.getRanges()[0] ? overallChart.getRanges()[0].getA1Notation() : 'N/A'}, new range: ${overallChartRange.getA1Notation()}`);
         const updatedChart = overallChart.modify()
           .clearRanges()
           .addRange(overallChartRange)
           .build();
         jobLevelSheet.updateChart(updatedChart);
-        Logger.log("Overall chart updated (not recreated)");
+        Logger.log("Overall chart updated successfully (not recreated)");
       } catch (e) {
-        Logger.log(`Error updating overall chart: ${e.message}`);
+        Logger.log(`ERROR updating overall chart: ${e.message}`);
+        Logger.log(`Stack trace: ${e.stack}`);
+        // Don't create a new chart if update fails - this prevents duplicates
       }
     } else {
-      // Only create new chart if it doesn't exist
-      Logger.log("Overall chart not found, creating new chart");
-      const newOverallChart = jobLevelSheet.newChart()
-        .setChartType(Charts.ChartType.COLUMN)
-        .addRange(overallChartRange)
-        .setPosition(overallDataRows.length + 2, 4, 0, 0)
-        .setOption('title', 'Job Level Headcount (Overall)')
-        .setOption('legend.position', 'none')
-        .setOption('hAxis.title', 'Job Level')
-        .setOption('vAxis.title', 'Headcount')
-        .setOption('width', 600)
-        .setOption('height', 400)
-        .build();
-      jobLevelSheet.insertChart(newOverallChart);
+      // Only create new chart if it doesn't exist AND we're absolutely sure
+      // Double-check one more time before creating
+      const doubleCheckCharts = jobLevelSheet.getCharts();
+      let foundInDoubleCheck = false;
+      for (const ch of doubleCheckCharts) {
+        try {
+          const opts = ch.getOptions();
+          const t = opts ? opts.title : null;
+          const ranges = ch.getRanges();
+          const r = ranges && ranges.length > 0 ? ranges[0] : null;
+          if ((t && (t.includes('Overall') || t.includes('Job Level Headcount (Overall)'))) ||
+              (r && r.getRow() === 1 && r.getColumn() === 1 && r.getNumColumns() === 2)) {
+            foundInDoubleCheck = true;
+            Logger.log(`Found overall chart in double-check - NOT creating new one`);
+            break;
+          }
+        } catch (e) {
+          // Continue checking
+        }
+      }
+      
+      if (!foundInDoubleCheck) {
+        Logger.log("Overall chart not found after double-check, creating new chart");
+        const newOverallChart = jobLevelSheet.newChart()
+          .setChartType(Charts.ChartType.COLUMN)
+          .addRange(overallChartRange)
+          .setPosition(overallDataRows.length + 2, 4, 0, 0)
+          .setOption('title', 'Job Level Headcount (Overall)')
+          .setOption('legend.position', 'none')
+          .setOption('hAxis.title', 'Job Level')
+          .setOption('vAxis.title', 'Headcount')
+          .setOption('width', 600)
+          .setOption('height', 400)
+          .build();
+        jobLevelSheet.insertChart(newOverallChart);
+        Logger.log("New overall chart created");
+      }
     }
     
     // Chart 2: Site Breakdown (Stacked Column Chart)
