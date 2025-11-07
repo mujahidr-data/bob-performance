@@ -744,6 +744,7 @@ function generateOverallData() {
         metrics.terms,
         metrics.voluntaryTerms,
         metrics.involuntaryTerms,
+        metrics.regrettableTerms,
         metrics.attrition,
         metrics.retention,
         metrics.turnover
