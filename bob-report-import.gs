@@ -1188,13 +1188,8 @@ function generateHeadcountMetrics() {
   // Build table: Site/Metric as rows, Periods as columns
   const headerRow = ["Site / Metric"].concat(periods.map(p => p.label));
   
-  if (isNewSheet) {
-    headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
-    headcountSheet.getRange(1, 1, 1, headerRow.length).setFontWeight("bold");
-  } else {
-    // Update header row
-    headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
-  }
+  // Only update header row values, preserve formatting
+  headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
   
   // Define metrics to calculate for each site
   const metricLabels = [
@@ -1233,23 +1228,7 @@ function generateHeadcountMetrics() {
   // Build data rows using cached metrics
   const dataRows = [];
   sites.forEach((site, siteIndex) => {
-    // Add header row for this site section (only if not the first site)
-    if (siteIndex > 0) {
-      // Add 2 blank rows first, then header
-      const blankRow = [""].concat(new Array(periods.length).fill(""));
-      dataRows.push(blankRow);
-      dataRows.push(blankRow.slice()); // Second blank row
-      
-      // Add header row with site name and period labels
-      const siteHeaderRow = [site].concat(periods.map(p => p.label));
-      dataRows.push(siteHeaderRow);
-    } else {
-      // For first site, add header row right after main header
-      const siteHeaderRow = [site].concat(periods.map(p => p.label));
-      dataRows.push(siteHeaderRow);
-    }
-    
-    // For each site, create rows for each metric
+    // For each site, create rows for each metric (no site header rows)
     metricLabels.forEach((metricLabel, metricIndex) => {
       const row = [`${site} - ${metricLabel}`];
       
@@ -1298,164 +1277,28 @@ function generateHeadcountMetrics() {
       dataRows.push(row);
     });
     
-    // Add 2 blank rows after each site (except the last one)
+    // Add 1 blank row after each site (except the last one)
     if (siteIndex < sites.length - 1) {
       const blankRow = [""].concat(new Array(periods.length).fill(""));
       dataRows.push(blankRow);
-      dataRows.push(blankRow.slice()); // Second blank row
     }
   });
   
-  // Write data in one batch operation
+  // Write data in one batch operation - only values, preserve all user formatting
   if (dataRows.length > 0) {
     try {
       headcountSheet.getRange(2, 1, dataRows.length, headerRow.length).setValues(dataRows);
       
-      // Format percentage columns (Attrition % and Regrettable %) - simplified approach
-      // Only format if it's a new sheet to avoid overwriting user formatting
-      if (isNewSheet) {
-        // Calculate row positions accounting for blank rows and header rows between sites
-        const percentageRanges = [];
-        const regrettableRanges = [];
-        const siteHeaderRanges = [];
-        let currentRow = 2; // Data starts at row 2
-        
-        sites.forEach((site, siteIndex) => {
-          // Site header row (first row of each site section)
-          const siteHeaderRow = currentRow;
-          if (siteHeaderRow <= dataRows.length + 1) {
-            siteHeaderRanges.push(headcountSheet.getRange(siteHeaderRow, 1, 1, headerRow.length));
-          }
-          
-          // Metric rows for this site (after header row)
-          // Index 0 = Average Headcount, 1 = Hires, 2 = Terminations, 3 = Regrettable Terms,
-          // 4 = Non-Regrettable Terms, 5 = Attrition %, 6 = Regrettable %
-          const attritionRow = currentRow + 1 + 5; // Attrition % is at index 5 (currentRow + 1 for first metric + 5)
-          const regrettableRow = currentRow + 1 + 6; // Regrettable % is at index 6 (currentRow + 1 for first metric + 6)
-          
-          if (attritionRow <= dataRows.length + 1) {
-            percentageRanges.push(headcountSheet.getRange(attritionRow, 2, 1, periods.length));
-          }
-          if (regrettableRow <= dataRows.length + 1) {
-            const range = headcountSheet.getRange(regrettableRow, 2, 1, periods.length);
-            percentageRanges.push(range);
-            regrettableRanges.push(range); // Track for conditional formatting
-          }
-          
-          // Move to next site (1 header + 7 metrics + 2 blank rows if not last site)
-          currentRow += 1 + metricLabels.length; // 1 for header, 7 for metrics
-          if (siteIndex < sites.length - 1) {
-            currentRow += 2; // Add 2 blank rows
-          }
-        });
-        
-        // Format site header rows (bold, background color)
-        if (siteHeaderRanges.length > 0) {
-          siteHeaderRanges.forEach(range => {
-            try {
-              range.setFontWeight("bold");
-              range.setBackground("#e8f0fe"); // Light blue background
-              range.setFontColor("#1a73e8"); // Blue text
-            } catch (e) {
-              Logger.log(`Error formatting site header: ${e.message}`);
-            }
-          });
-        }
-        
-        // Format all percentage ranges at once
-        if (percentageRanges.length > 0) {
-          percentageRanges.forEach(range => {
-            try {
-              range.setNumberFormat("0.0%");
-            } catch (e) {
-              Logger.log(`Error formatting range: ${e.message}`);
-            }
-          });
-        }
-        
-        // Add conditional formatting for top 2 highest regrettable % values per site
-        if (regrettableRanges.length > 0) {
-          regrettableRanges.forEach(range => {
-            try {
-              // Get all values from this range
-              const values = range.getValues()[0];
-              const numericValues = values
-                .map((v, idx) => ({ value: v, index: idx }))
-                .filter(item => item.value !== "" && item.value !== null && !isNaN(item.value) && item.value > 0)
-                .sort((a, b) => b.value - a.value); // Sort descending
-              
-              if (numericValues.length >= 2) {
-                // Get top 2 values
-                const top2Values = numericValues.slice(0, 2);
-                const secondHighest = top2Values[1].value;
-                
-                // Apply conditional formatting: highlight cells >= second highest value
-                // This will highlight the top 2 (or more if tied)
-                const rule = SpreadsheetApp.newConditionalFormatRule()
-                  .setRanges([range])
-                  .whenNumberGreaterThanOrEqualTo(secondHighest)
-                  .setBackground("#ffcccc") // Light red
-                  .setFontColor("#cc0000") // Dark red text
-                  .build();
-                
-                const rules = headcountSheet.getConditionalFormatRules();
-                rules.push(rule);
-                headcountSheet.setConditionalFormatRules(rules);
-              } else if (numericValues.length === 1) {
-                // Only one value, highlight it
-                const rule = SpreadsheetApp.newConditionalFormatRule()
-                  .setRanges([range])
-                  .whenNumberGreaterThan(0)
-                  .setBackground("#ffcccc") // Light red
-                  .setFontColor("#cc0000") // Dark red text
-                  .build();
-                
-                const rules = headcountSheet.getConditionalFormatRules();
-                rules.push(rule);
-                headcountSheet.setConditionalFormatRules(rules);
-              }
-            } catch (e) {
-              Logger.log(`Error applying conditional formatting: ${e.message}`);
-            }
-          });
-        }
-        
-        // Apply borders and formatting to all data cells
-        try {
-          const dataRange = headcountSheet.getRange(1, 1, dataRows.length + 1, headerRow.length);
-          
-          // Apply borders to all cells
-          const borderStyle = SpreadsheetApp.BorderStyle.SOLID;
-          const borderColor = "#dadce0"; // Light gray
-          
-          // Top border on header row
-          headcountSheet.getRange(1, 1, 1, headerRow.length)
-            .setBorder(true, true, true, true, true, true, borderColor, borderStyle);
-          
-          // Borders on all data cells
-          dataRange.setBorder(true, true, true, true, true, true, borderColor, borderStyle);
-          
-          // Format metric label column (Column A) - bold for metric names
-          const metricLabelRange = headcountSheet.getRange(2, 1, dataRows.length, 1);
-          metricLabelRange.setFontWeight("bold");
-          
-        } catch (e) {
-          Logger.log(`Error applying borders: ${e.message}`);
-        }
+      // Clear any extra rows if data shrunk
+      const existingLastRow = headcountSheet.getLastRow();
+      if (existingLastRow > dataRows.length + 1) {
+        const rowsToClear = existingLastRow - (dataRows.length + 1);
+        headcountSheet.getRange(dataRows.length + 2, 1, rowsToClear, headerRow.length).clearContent();
       }
     } catch (error) {
       Logger.log(`Error writing headcount metrics: ${error.message}`);
       SpreadsheetApp.getUi().alert(`Error generating headcount metrics: ${error.message}`);
       return;
-    }
-  }
-  
-  // Only auto-resize if new sheet (skip if it might be slow)
-  if (isNewSheet && headerRow.length < 50) {
-    try {
-      headcountSheet.autoResizeColumns(1, Math.min(headerRow.length, 10)); // Limit to first 10 columns
-    } catch (e) {
-      Logger.log(`Error auto-resizing: ${e.message}`);
     }
   }
   
