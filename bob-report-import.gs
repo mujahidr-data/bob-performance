@@ -1188,9 +1188,6 @@ function generateHeadcountMetrics() {
   // Build table: Site/Metric as rows, Periods as columns
   const headerRow = ["Site / Metric"].concat(periods.map(p => p.label));
   
-  // Only update header row values, preserve formatting
-  headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
-  
   // Define metrics to calculate for each site
   const metricLabels = [
     "Average Headcount",
@@ -1290,13 +1287,13 @@ function generateHeadcountMetrics() {
   // Write data in one batch operation - only values, preserve all user formatting
   if (dataRows.length > 0) {
     try {
-      headcountSheet.getRange(2, 1, dataRows.length, headerRow.length).setValues(dataRows);
+      headcountSheet.getRange(1, 1, dataRows.length, headerRow.length).setValues(dataRows);
       
       // Clear any extra rows if data shrunk
       const existingLastRow = headcountSheet.getLastRow();
-      if (existingLastRow > dataRows.length + 1) {
-        const rowsToClear = existingLastRow - (dataRows.length + 1);
-        headcountSheet.getRange(dataRows.length + 2, 1, rowsToClear, headerRow.length).clearContent();
+      if (existingLastRow > dataRows.length) {
+        const rowsToClear = existingLastRow - dataRows.length;
+        headcountSheet.getRange(dataRows.length + 1, 1, rowsToClear, headerRow.length).clearContent();
       }
     } catch (error) {
       Logger.log(`Error writing headcount metrics: ${error.message}`);
