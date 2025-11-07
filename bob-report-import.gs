@@ -809,30 +809,35 @@ function generateOverallData() {
     infoRow += filterInfo.length + 1;
   }
   
-  // Add formula descriptions
+  // Add formula descriptions in Column T (index 20, 0-based: 19)
   const descriptions = [
-    ["Formula Descriptions:", ""],
-    ["", ""],
-    ["Attrition %:", "Voluntary Terms / Average Headcount"],
-    ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"],
-    ["", ""],
-    ["Retention %:", "(Opening Headcount - Total Terms) / Opening Headcount"],
-    ["", ""],
-    ["Turnover %:", "Total Terms / Average Headcount"],
-    ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"],
-    ["", ""],
-    ["Regrettable Turnover %:", "Regrettable Terms / Average Headcount"],
-    ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"]
+    ["Formula Descriptions:"],
+    [""],
+    ["Attrition %:"],
+    ["Voluntary Terms / Average Headcount"],
+    ["Where Average Headcount = (Opening HC + Closing HC) / 2"],
+    [""],
+    ["Retention %:"],
+    ["(Opening Headcount - Total Terms) / Opening Headcount"],
+    [""],
+    ["Turnover %:"],
+    ["Total Terms / Average Headcount"],
+    ["Where Average Headcount = (Opening HC + Closing HC) / 2"],
+    [""],
+    ["Regrettable Turnover %:"],
+    ["Regrettable Terms / Average Headcount"],
+    ["Where Average Headcount = (Opening HC + Closing HC) / 2"]
   ];
   
-  metricsSheet.getRange(infoRow, 1, descriptions.length, 2).setValues(descriptions);
+  // Column T is index 20 (1-based), so 0-based index is 19
+  metricsSheet.getRange(infoRow, 20, descriptions.length, 1).setValues(descriptions);
   
   // Format the description section
   if (isNewSheet) {
-    const descRange = metricsSheet.getRange(infoRow, 1, 1, 2);
+    const descRange = metricsSheet.getRange(infoRow, 20, 1, 1);
     descRange.setFontWeight("bold");
-    // Make formula column wider for readability
-    metricsSheet.setColumnWidth(2, 400);
+    // Make column T wider for readability
+    metricsSheet.setColumnWidth(20, 400);
   }
   
   SpreadsheetApp.getUi().alert(`Overall Data generated for ${periods.length} periods.`);
