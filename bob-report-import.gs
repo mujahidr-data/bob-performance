@@ -1714,6 +1714,22 @@ function generateJobLevelHeadcount() {
   
   // Build ELT Breakdown table (Job Level, ELT1, ELT2, ..., Total)
   const eltBreakdownStartRow = siteBreakdownStartRow + siteBreakdownRows.length + 4; // Leave 2 blank rows after site breakdown
+  
+  // Add dropdown filter for ELT selection (above the ELT breakdown table)
+  const eltFilterRow = eltBreakdownStartRow - 1;
+  jobLevelSheet.getRange(eltFilterRow, 1).setValue("Filter by ELT:");
+  if (isNewSheet) {
+    jobLevelSheet.getRange(eltFilterRow, 1).setFontWeight("bold");
+  }
+  
+  // Create dropdown with "All" option plus all ELTs
+  const eltFilterOptions = ["All"].concat(sortedELTs);
+  const eltFilterRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(eltFilterOptions, true)
+    .build();
+  jobLevelSheet.getRange(eltFilterRow, 2).setDataValidation(eltFilterRule);
+  jobLevelSheet.getRange(eltFilterRow, 2).setValue("All"); // Default to "All"
+  
   const eltHeaders = ["Job Level"].concat(sortedELTs).concat(["Total"]);
   jobLevelSheet.getRange(eltBreakdownStartRow, 1, 1, eltHeaders.length).setValues([eltHeaders]);
   if (isNewSheet) {
@@ -1738,6 +1754,67 @@ function generateJobLevelHeadcount() {
   if (eltBreakdownRows.length > 0) {
     jobLevelSheet.getRange(eltBreakdownStartRow + 1, 1, eltBreakdownRows.length, eltHeaders.length).setValues(eltBreakdownRows);
   }
+  
+  // Create filtered data range for chart (starts below the ELT breakdown table)
+  // This will be a formula-based table that filters based on the dropdown selection
+  const filteredEltStartRow = eltBreakdownStartRow + eltBreakdownRows.length + 3; // Leave 2 blank rows
+  const filteredHeadersRow = filteredEltStartRow + 1;
+  
+  // Create filtered data table with formulas
+  // Header row: Job Level + selected ELT column (or all columns if "All")
+  const filterCellRef = `$B$${eltFilterRow}`;
+  const dataStartCol = eltBreakdownStartRow;
+  const dataEndCol = eltBreakdownStartRow + eltBreakdownRows.length;
+  
+  // Helper function to convert column number to letter (1=A, 2=B, etc.)
+  const colNumToLetter = (num) => {
+    let letter = '';
+    while (num > 0) {
+      const remainder = (num - 1) % 26;
+      letter = String.fromCharCode(65 + remainder) + letter;
+      num = Math.floor((num - 1) / 26);
+    }
+    return letter;
+  };
+  
+  // For each job level row, create a formula that shows Job Level + selected ELT column
+  sortedJobLevels.forEach((level, levelIndex) => {
+    const dataRow = eltBreakdownStartRow + 1 + levelIndex; // +1 for header row in original table
+    
+    // Job Level column (always show) - Column A
+    jobLevelSheet.getRange(filteredHeadersRow + levelIndex, 1).setFormula(`=A${dataRow}`);
+    
+    // ELT column(s) - if "All", show all ELT columns, otherwise show only selected ELT
+    if (sortedELTs.length > 0) {
+      sortedELTs.forEach((elt, eltIndex) => {
+        const eltColIndex = eltIndex + 2; // +2 because column A is Job Level, column B is first ELT
+        const eltColLetter = colNumToLetter(eltColIndex);
+        
+        // Formula: If dropdown is "All", show all columns. If dropdown matches this ELT, show it. Otherwise blank.
+        // Escape quotes in ELT name for formula
+        const escapedElt = elt.replace(/"/g, '""');
+        const formula = `=IF(${filterCellRef}="All", ${eltColLetter}${dataRow}, IF(${filterCellRef}="${escapedElt}", ${eltColLetter}${dataRow}, ""))`;
+        jobLevelSheet.getRange(filteredHeadersRow + levelIndex, eltIndex + 2).setFormula(formula);
+      });
+    }
+  });
+  
+  // Set header row for filtered data
+  if (sortedELTs.length > 0) {
+    // Header formula: If "All", show all ELT headers, otherwise show only selected ELT header
+    sortedELTs.forEach((elt, eltIndex) => {
+      const eltColIndex = eltIndex + 2;
+      const eltColLetter = colNumToLetter(eltColIndex);
+      const escapedElt = elt.replace(/"/g, '""');
+      const headerFormula = `=IF(${filterCellRef}="All", ${eltColLetter}${eltBreakdownStartRow}, IF(${filterCellRef}="${escapedElt}", ${eltColLetter}${eltBreakdownStartRow}, ""))`;
+      jobLevelSheet.getRange(filteredHeadersRow, eltIndex + 2).setFormula(headerFormula);
+    });
+  }
+  
+  // Create the filtered chart range (excludes empty columns when filtering)
+  // We'll use a dynamic range that adjusts based on the filter
+  const filteredChartNumCols = sortedELTs.length + 1; // Job Level + all ELTs (formulas will handle filtering)
+  const filteredChartRange = jobLevelSheet.getRange(filteredHeadersRow, 1, sortedJobLevels.length + 1, filteredChartNumCols);
   
   // Auto-resize columns if new sheet
   if (isNewSheet) {
@@ -1864,26 +1941,26 @@ function generateJobLevelHeadcount() {
       jobLevelSheet.insertChart(newSiteChart);
     }
     
-    // Chart 3: ELT Breakdown (Stacked Column Chart)
-    // Exclude the "Total" column - only include Job Level + ELT columns
+    // Chart 3: ELT Breakdown (Stacked Column Chart) - Interactive with dropdown filter
+    // The chart references the filtered data table which updates automatically based on dropdown
     if (eltChart) {
-      // Update existing chart - preserve position and formatting
+      // Update existing chart to use filtered data range
       try {
         const updatedChart = eltChart.modify()
           .clearRanges()
-          .addRange(eltChartRange)
+          .addRange(filteredChartRange)
           .build();
         jobLevelSheet.updateChart(updatedChart);
       } catch (e) {
         Logger.log(`Error updating ELT chart: ${e.message}`);
       }
     } else {
-      // Create new chart
+      // Create new chart pointing to filtered data range
       const newELTChart = jobLevelSheet.newChart()
         .setChartType(Charts.ChartType.COLUMN)
-        .addRange(eltChartRange)
+        .addRange(filteredChartRange)
         .setPosition(eltBreakdownStartRow + eltBreakdownRows.length + 2, 4, 0, 0)
-        .setOption('title', 'Job Level Headcount by ELT')
+        .setOption('title', 'Job Level Headcount by ELT (Use dropdown above to filter)')
         .setOption('isStacked', true)
         .setOption('legend.position', 'right')
         .setOption('hAxis.title', 'Job Level')
@@ -1892,6 +1969,13 @@ function generateJobLevelHeadcount() {
         .setOption('height', 400)
         .build();
       jobLevelSheet.insertChart(newELTChart);
+    }
+    
+    // Add instruction text
+    jobLevelSheet.getRange(eltFilterRow, 3).setValue("(Change dropdown to filter chart by ELT - chart updates automatically)");
+    if (isNewSheet) {
+      jobLevelSheet.getRange(eltFilterRow, 3).setFontStyle("italic");
+      jobLevelSheet.getRange(eltFilterRow, 3).setFontColor("#666666");
     }
   } catch (e) {
     Logger.log(`Error creating/updating charts: ${e.message}`);
