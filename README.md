@@ -191,16 +191,19 @@ Core function that calculates all HR metrics for a given period.
 Generates overall company HR metrics for multiple periods. Creates/updates "All CIQ" sheet.
 - Supports aggregation by Halves (H1/H2) or Quarters (Q1-Q4)
 - Clears existing data but preserves formatting when aggregation is used
+- Conditional formatting: Highlights top 2 values in Attrition %, Retention %, Turnover %, Regrettable Turnover % columns (bold, red)
 
 ### `generateHeadcountBySite()`
 Generates site-wise headcount metrics month-on-month. Creates/updates "Headcount by Site" sheet.
 - Supports aggregation by Halves or Quarters
-- Clears existing data but preserves formatting when aggregation is used
+- Clears entire sheet contents (preserves formatting) before writing new data
+- Conditional formatting: Highlights top 2 values in Retention %, Turnover %, Regrettable % rows (bold, red)
 
 ### `generateHeadcountByELT()`
 Generates ELT-wise headcount metrics month-on-month. Creates/updates "Headcount by ELT" sheet.
 - Supports aggregation by Halves or Quarters
-- Clears existing data but preserves formatting when aggregation is used
+- Clears entire sheet contents (preserves formatting) before writing new data
+- Conditional formatting: Highlights top 2 values in Retention %, Turnover %, Regrettable % rows (bold, red)
 
 ### `generateHeadcountByJobLevel()`
 Generates job level headcount as of today with site-level breakdowns. Creates/updates "Headcount by Job Level" sheet.
@@ -217,6 +220,10 @@ Creates a user-friendly guide sheet with formatted instructions, icons, and best
 - Includes Quick Start, Available Reports, Filtering Options, and Tips sections
 - Gridlines hidden and formatted with colors and proper spacing
 - Automatically inserted at the beginning of the spreadsheet
+
+### `colNumToLetter(num)`
+Helper function to convert column number to letter (1=A, 2=B, 27=AA, etc.).
+- Used for conditional formatting formulas and dynamic column references
 
 ### `getUniqueFilterValues()`
 Extracts unique values for Site, ELT, Department, and Termination Reasons from RawData.
@@ -276,8 +283,11 @@ The script automatically creates/updates these sheets:
 
 1. **RawData**: Imported employee data from Bob (hidden after processing)
 2. **All CIQ**: Overall company HR metrics table
+   - Conditional formatting: Top 2 values highlighted in percentage columns
 3. **Headcount by Site**: Site-wise headcount metrics
+   - Conditional formatting: Top 2 values highlighted in percentage metric rows
 4. **Headcount by ELT**: ELT-wise headcount metrics
+   - Conditional formatting: Top 2 values highlighted in percentage metric rows
 5. **Headcount by Job Level**: Job level headcount with charts
 6. **Terminations Reasons Drilldown**: Termination reasons breakdown (Overall, by Site, by ELT)
 7. **FilterConfig**: Filter selection interface (optional)
@@ -316,7 +326,14 @@ Potential improvements:
 
 ## Version History
 
-- **v2.1** (Current): User experience improvements and formatting enhancements
+- **v2.2** (Current): Conditional formatting for percentage metrics
+  - Added conditional formatting to highlight top 2 values in percentage columns
+  - All CIQ: Top 2 values highlighted in Attrition %, Retention %, Turnover %, Regrettable Turnover %
+  - Headcount by Site: Top 2 values highlighted in Retention %, Turnover %, Regrettable % rows
+  - Headcount by ELT: Top 2 values highlighted in Retention %, Turnover %, Regrettable % rows
+  - Format: Bold text, red font, light red background for easy identification
+
+- **v2.1**: User experience improvements and formatting enhancements
   - Added User Guide sheet with formatted instructions and icons
   - Enhanced FilterConfig sheet: Column B width increased and center-aligned
   - Terminations Reasons Drilldown: Gridlines hidden, auto-resize columns

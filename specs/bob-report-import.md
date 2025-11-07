@@ -147,6 +147,8 @@ Main function to generate overall company HR metrics table. Creates/updates "All
 - Formats percentage columns
 - Displays applied filters at bottom of sheet
 - Clears existing data but preserves formatting when aggregation is used
+- Conditional formatting: Highlights top 2 values in Attrition %, Retention %, Turnover %, Regrettable Turnover % columns
+  - Format: Bold text, red font (#ff0000), light red background (#ffebee)
 
 #### `generateHeadcountBySite()`
 Generates site-wise headcount metrics month-on-month. Creates/updates "Headcount by Site" sheet.
@@ -155,6 +157,9 @@ Generates site-wise headcount metrics month-on-month. Creates/updates "Headcount
 - Supports aggregation by Halves or Quarters
 - Clears entire sheet contents (preserves formatting) before writing new data
 - Uses getMaxRows() and getMaxColumns() to ensure complete data clearing
+- Conditional formatting: Highlights top 2 values in Retention %, Turnover %, Regrettable % rows
+  - Format: Bold text, red font (#ff0000), light red background (#ffebee)
+  - Applied to period columns (columns 2 onwards) for each percentage metric row
 
 #### `generateHeadcountByELT()`
 Generates ELT-wise headcount metrics month-on-month. Creates/updates "Headcount by ELT" sheet.
@@ -163,6 +168,9 @@ Generates ELT-wise headcount metrics month-on-month. Creates/updates "Headcount 
 - Supports aggregation by Halves or Quarters
 - Clears entire sheet contents (preserves formatting) before writing new data
 - Uses getMaxRows() and getMaxColumns() to ensure complete data clearing
+- Conditional formatting: Highlights top 2 values in Retention %, Turnover %, Regrettable % rows
+  - Format: Bold text, red font (#ff0000), light red background (#ffebee)
+  - Applied to period columns (columns 2 onwards) for each percentage metric row
 
 #### `generateHeadcountByJobLevel()`
 Generates job level headcount as of today with site-level breakdowns. Creates/updates "Headcount by Job Level" sheet.
@@ -209,6 +217,18 @@ Creates a user-friendly guide sheet with formatted instructions, icons, and best
 - Gridlines hidden and formatted with colors and proper spacing
 - Automatically inserted at the beginning of the spreadsheet
 - Column widths optimized for readability
+
+#### `colNumToLetter(num)`
+Helper function to convert column number to letter (1=A, 2=B, 27=AA, etc.).
+
+**Parameters:**
+- `num` (number): Column number (1-based)
+
+**Returns:**
+- `string`: Column letter(s)
+
+**Usage:**
+- Used for conditional formatting formulas and dynamic column references
 
 ### Menu Structure
 The `onOpen()` function creates a "Bob HR Analytics" menu with:
@@ -266,4 +286,9 @@ The `onOpen()` function creates a "Bob HR Analytics" menu with:
 - Headcount by Site and Headcount by ELT clear entire sheet contents before writing new data
 - Terminations Reasons Drilldown supports specific period selection (H1, H2, Q1, Q2, Q3, Q4)
 - FilterConfig column B is formatted with increased width and center alignment for better visibility
+- Conditional formatting automatically highlights top 2 values in percentage columns/rows:
+  - All CIQ: Columns 9-12 (Attrition %, Retention %, Turnover %, Regrettable Turnover %)
+  - Headcount by Site: Retention %, Turnover %, Regrettable % rows
+  - Headcount by ELT: Retention %, Turnover %, Regrettable % rows
+- Conditional formatting uses RANK formula to identify top 2 values per column/row
 
