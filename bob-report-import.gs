@@ -72,6 +72,7 @@ function onOpen() {
     .addSeparator()
     // Additional reports
     .addItem('Generate Headcount Metrics', 'generateHeadcountMetrics')
+    .addItem('Generate ELT Metrics', 'generateELTMetrics')
     .addItem('Generate Job Level Headcount', 'generateJobLevelHeadcount')
     .addItem('Generate Termination Reasons Table', 'generateTerminationReasonsTable')
     .addToUi();
@@ -369,6 +370,9 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     Logger.log(`After Department filter ("${filterDept}"): ${filteredRows.length} rows (from ${beforeDept})`);
   }
   
+  // Note: terminationReason filter is applied only to termination calculations, not headcount
+  // This allows filtering terminations by reason while keeping headcount accurate
+  
   if (filteredRows.length === 0) {
     Logger.log(`WARNING: No rows match the filters! Filters: ${JSON.stringify(filters)}`);
   }
@@ -498,6 +502,7 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   // Terms: Original formula = COUNTIFS(O:O, ">=" & periodStart, O:O, "<=" & periodEnd)
   // Employees who terminated between periodStart and periodEnd (inclusive)
   // Count unique employee names
+  // If terminationReason filter is specified, only count terminations with that reason
   const termNames = new Set();
   filteredRows.forEach(row => {
     const empName = getEmpName(row);
@@ -506,6 +511,11 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     if (!termDate) return;
     if (termDate >= periodStartDate && termDate <= periodEndDate) {
+      // Apply termination reason filter if specified
+      if (filters.terminationReason) {
+        const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+        if (termReason !== filters.terminationReason) return;
+      }
       termNames.add(empName);
     }
   });
@@ -514,6 +524,7 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   // Voluntary Terms: Original formula = COUNTIFS with multiple conditions
   // Employees who terminated in period AND have voluntary termination type
   // Count unique employee names
+  // If terminationReason filter is specified, only count terminations with that reason
   const voluntaryTermNames = new Set();
   filteredRows.forEach(row => {
     const empName = getEmpName(row);
@@ -522,6 +533,12 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     if (!termDate) return;
     if (termDate < periodStartDate || termDate > periodEndDate) return;
+    
+    // Apply termination reason filter if specified
+    if (filters.terminationReason) {
+      const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+      if (termReason !== filters.terminationReason) return;
+    }
     
     const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
     const isVoluntary = termType === "Voluntary" || 
@@ -536,6 +553,7 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   // Involuntary Terms: Original formula = COUNTIFS with multiple conditions
   // Employees who terminated in period AND have involuntary termination type
   // Count unique employee names
+  // If terminationReason filter is specified, only count terminations with that reason
   const involuntaryTermNames = new Set();
   filteredRows.forEach(row => {
     const empName = getEmpName(row);
@@ -544,6 +562,12 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     if (!termDate) return;
     if (termDate < periodStartDate || termDate > periodEndDate) return;
+    
+    // Apply termination reason filter if specified
+    if (filters.terminationReason) {
+      const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+      if (termReason !== filters.terminationReason) return;
+    }
     
     const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
     const isInvoluntary = termType === "Involuntary" || 
@@ -564,6 +588,7 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   //   - Column T = "Involuntary" → Not Regrettable (always)
   //   - Column T = "Voluntary - Non regrettable" → Not Regrettable
   // Count unique employee names
+  // If terminationReason filter is specified, only count terminations with that reason
   const regrettableTermNames = new Set();
   filteredRows.forEach(row => {
     const empName = getEmpName(row);
@@ -572,6 +597,12 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     if (!termDate) return;
     if (termDate < periodStartDate || termDate > periodEndDate) return;
+    
+    // Apply termination reason filter if specified
+    if (filters.terminationReason) {
+      const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+      if (termReason !== filters.terminationReason) return;
+    }
     
     const termCategory = String(row[COLUMN_INDICES.TERMINATION_CATEGORY] || "").trim();
     const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
@@ -647,19 +678,17 @@ function updateFilterOptions() {
   filterSheet.getRange(1, 1).setFontWeight("bold");
   filterSheet.getRange(1, 1).setFontSize(12);
   
-  filterSheet.getRange(3, 1).setValue("Filters for 'Headcount Metrics' page (Site, ELT, Department):");
+  filterSheet.getRange(3, 1).setValue("Filters for 'ELT Metrics' and 'Termination Reasons' (ELT, Termination Reason):");
   filterSheet.getRange(3, 1).setFontWeight("bold");
   filterSheet.getRange(3, 1).setFontSize(11);
   
   // Write headers
-  filterSheet.getRange(4, 1, 1, 4).setValues([["Site", "ELT", "Department", "Termination Reason"]]);
-  filterSheet.getRange(4, 1, 1, 4).setFontWeight("bold");
+  filterSheet.getRange(4, 1, 1, 2).setValues([["ELT", "Termination Reason"]]);
+  filterSheet.getRange(4, 1, 1, 2).setFontWeight("bold");
   
   // Find max length
   const maxLength = Math.max(
-    uniqueValues.sites.length,
     uniqueValues.elts.length,
-    uniqueValues.departments.length,
     uniqueValues.terminationReasons.length
   );
   
@@ -668,17 +697,15 @@ function updateFilterOptions() {
     const values = [];
     for (let i = 0; i < maxLength; i++) {
       values.push([
-        uniqueValues.sites[i] || "",
         uniqueValues.elts[i] || "",
-        uniqueValues.departments[i] || "",
         uniqueValues.terminationReasons[i] || ""
       ]);
     }
-    filterSheet.getRange(5, 1, maxLength, 4).setValues(values);
+    filterSheet.getRange(5, 1, maxLength, 2).setValues(values);
   }
   
   // Auto-resize columns
-  filterSheet.autoResizeColumns(1, 4);
+  filterSheet.autoResizeColumns(1, 2);
   
   // Add instructions
   const instructionRow = maxLength + 6;
@@ -686,10 +713,10 @@ function updateFilterOptions() {
   filterSheet.getRange(instructionRow, 1).setFontWeight("bold");
   filterSheet.getRange(instructionRow + 1, 1).setValue("1. Review the unique values above");
   filterSheet.getRange(instructionRow + 2, 1).setValue("2. Use these values in FilterConfig sheet to filter data");
-  filterSheet.getRange(instructionRow + 3, 1).setValue("3. Site, ELT, Department filters apply to: Headcount Metrics only (Overall Data shows entire company)");
-  filterSheet.getRange(instructionRow + 4, 1).setValue("4. Termination Reason filter applies to: Termination Reasons Table");
+  filterSheet.getRange(instructionRow + 3, 1).setValue("3. ELT filter applies to: ELT Metrics and Termination Reasons");
+  filterSheet.getRange(instructionRow + 4, 1).setValue("4. Termination Reason filter applies to: ELT Metrics and Termination Reasons");
   
-  SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.sites.length} sites, ${uniqueValues.elts.length} ELTs, ${uniqueValues.departments.length} departments, ${uniqueValues.terminationReasons.length} termination reasons.`);
+  SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.elts.length} ELTs, ${uniqueValues.terminationReasons.length} termination reasons.`);
 }
 
 /**
@@ -713,9 +740,9 @@ function generateOverallData() {
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
     // Get time period filters only (for Overall Data)
-    const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(12, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(13, 2).getValue(); // Quarter filter
+    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
@@ -975,7 +1002,7 @@ function createFilterConfigSheet() {
   configSheet.getRange(1, 1).setFontWeight("bold");
   configSheet.getRange(1, 1).setFontSize(12);
   
-  configSheet.getRange(3, 1).setValue("Filters for 'Headcount Metrics' only (Site, ELT, Department):");
+  configSheet.getRange(3, 1).setValue("Filters for 'ELT Metrics' and 'Termination Reasons' (ELT, Termination Reason):");
   configSheet.getRange(3, 1).setFontWeight("bold");
   configSheet.getRange(3, 1).setFontSize(11);
   
@@ -983,41 +1010,33 @@ function createFilterConfigSheet() {
   configSheet.getRange(4, 1, 1, 2).setValues([["Filter", "Value"]]);
   configSheet.getRange(4, 1, 1, 2).setFontWeight("bold");
   
-  configSheet.getRange(5, 1).setValue("Site:");
-  configSheet.getRange(6, 1).setValue("ELT:");
-  configSheet.getRange(7, 1).setValue("Department:");
+  configSheet.getRange(5, 1).setValue("ELT:");
+  configSheet.getRange(6, 1).setValue("Termination Reason:");
   
   // Add data validation dropdowns
-  if (uniqueValues.sites.length > 0) {
-    const siteRule = SpreadsheetApp.newDataValidation()
-      .requireValueInList([""].concat(uniqueValues.sites), true)
-      .build();
-    configSheet.getRange(5, 2).setDataValidation(siteRule);
-  }
-  
   if (uniqueValues.elts.length > 0) {
     const eltRule = SpreadsheetApp.newDataValidation()
       .requireValueInList([""].concat(uniqueValues.elts), true)
       .build();
-    configSheet.getRange(6, 2).setDataValidation(eltRule);
+    configSheet.getRange(5, 2).setDataValidation(eltRule);
   }
   
-  if (uniqueValues.departments.length > 0) {
-    const deptRule = SpreadsheetApp.newDataValidation()
-      .requireValueInList([""].concat(uniqueValues.departments), true)
+  if (uniqueValues.terminationReasons.length > 0) {
+    const termReasonRule = SpreadsheetApp.newDataValidation()
+      .requireValueInList([""].concat(uniqueValues.terminationReasons), true)
       .build();
-    configSheet.getRange(7, 2).setDataValidation(deptRule);
+    configSheet.getRange(6, 2).setDataValidation(termReasonRule);
   }
   
-  // Time Period Filters for Overall Data and Headcount Metrics
-  configSheet.getRange(9, 1).setValue("Time Period Filter (for 'Overall Data' and 'Headcount Metrics'):");
-  configSheet.getRange(9, 1).setFontWeight("bold");
-  configSheet.getRange(9, 1).setFontSize(11);
+  // Time Period Filters for Overall Data, Headcount Metrics, and ELT Metrics
+  configSheet.getRange(8, 1).setValue("Time Period Filter (for 'Overall Data', 'Headcount Metrics', and 'ELT Metrics'):");
+  configSheet.getRange(8, 1).setFontWeight("bold");
+  configSheet.getRange(8, 1).setFontSize(11);
   
-  configSheet.getRange(10, 1).setValue("Filter Type:");
-  configSheet.getRange(11, 1).setValue("Year:");
-  configSheet.getRange(12, 1).setValue("Halves:");
-  configSheet.getRange(13, 1).setValue("Quarter:");
+  configSheet.getRange(9, 1).setValue("Filter Type:");
+  configSheet.getRange(10, 1).setValue("Year:");
+  configSheet.getRange(11, 1).setValue("Halves:");
+  configSheet.getRange(12, 1).setValue("Quarter:");
   
   // Year dropdown (2024, 2025, 2026, etc.)
   const currentYear = new Date().getFullYear();
@@ -1029,37 +1048,37 @@ function createFilterConfigSheet() {
   const yearRule = SpreadsheetApp.newDataValidation()
     .requireValueInList([""].concat(years), true)
     .build();
-  configSheet.getRange(11, 2).setDataValidation(yearRule);
-  configSheet.getRange(11, 3).setValue("(e.g., 2024 or 2025)");
-  configSheet.getRange(11, 3).setFontStyle("italic");
-  configSheet.getRange(11, 3).setFontColor("#666666");
+  configSheet.getRange(10, 2).setDataValidation(yearRule);
+  configSheet.getRange(10, 3).setValue("(e.g., 2024 or 2025)");
+  configSheet.getRange(10, 3).setFontStyle("italic");
+  configSheet.getRange(10, 3).setFontColor("#666666");
   
   // Halves dropdown (H1 = Jan-Jun, H2 = Jul-Dec)
   const halvesRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(["", "H1", "H2"], true)
     .build();
-  configSheet.getRange(12, 2).setDataValidation(halvesRule);
-  configSheet.getRange(12, 3).setValue("(e.g., H1 or H2)");
-  configSheet.getRange(12, 3).setFontStyle("italic");
-  configSheet.getRange(12, 3).setFontColor("#666666");
+  configSheet.getRange(11, 2).setDataValidation(halvesRule);
+  configSheet.getRange(11, 3).setValue("(e.g., H1 or H2)");
+  configSheet.getRange(11, 3).setFontStyle("italic");
+  configSheet.getRange(11, 3).setFontColor("#666666");
   
   // Quarter dropdown
   const quarterRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(["", "Q1", "Q2", "Q3", "Q4"], true)
     .build();
-  configSheet.getRange(13, 2).setDataValidation(quarterRule);
-  configSheet.getRange(13, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
-  configSheet.getRange(13, 3).setFontStyle("italic");
-  configSheet.getRange(13, 3).setFontColor("#666666");
+  configSheet.getRange(12, 2).setDataValidation(quarterRule);
+  configSheet.getRange(12, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
+  configSheet.getRange(12, 3).setFontStyle("italic");
+  configSheet.getRange(12, 3).setFontColor("#666666");
   
   // Add instructions
-  configSheet.getRange(15, 1).setValue("Instructions:");
-  configSheet.getRange(15, 1).setFontWeight("bold");
-  configSheet.getRange(16, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
-  configSheet.getRange(17, 1).setValue("2. For Overall Data & Headcount Metrics: Use Time Period filters to limit date range");
-  configSheet.getRange(18, 1).setValue("3. Time Period: Select Year OR Halves OR Quarter");
-  configSheet.getRange(19, 1).setValue("4. Run 'Generate Overall Data' or 'Generate Headcount Metrics' from menu");
-  configSheet.getRange(20, 1).setValue("5. Filters apply: Site/ELT/Dept → Headcount Metrics only; Time Period → Overall Data & Headcount Metrics");
+  configSheet.getRange(14, 1).setValue("Instructions:");
+  configSheet.getRange(14, 1).setFontWeight("bold");
+  configSheet.getRange(15, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
+  configSheet.getRange(16, 1).setValue("2. For Overall Data, Headcount Metrics & ELT Metrics: Use Time Period filters to limit date range");
+  configSheet.getRange(17, 1).setValue("3. Time Period: Select Year OR Halves OR Quarter");
+  configSheet.getRange(18, 1).setValue("4. Run 'Generate Overall Data', 'Generate Headcount Metrics', or 'Generate ELT Metrics' from menu");
+  configSheet.getRange(19, 1).setValue("5. Filters apply: ELT/Term Reason → ELT Metrics & Termination Reasons; Time Period → Overall Data, Headcount Metrics & ELT Metrics");
   
   configSheet.autoResizeColumns(1, 3);
   
@@ -1170,9 +1189,9 @@ function generateHeadcountMetrics() {
   let periods = allPeriods;
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
-    const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(12, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(13, 2).getValue(); // Quarter filter
+    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       // Filter by year
@@ -1190,18 +1209,8 @@ function generateHeadcountMetrics() {
     // If no time period filter, use all periods
   }
   
-  // Get site/ELT/Department filters from FilterConfig
+  // Headcount Metrics is structured by site, so no additional filters needed
   let additionalFilters = {};
-  if (filterConfigSheet) {
-    const eltCell = filterConfigSheet.getRange(6, 2);
-    const deptCell = filterConfigSheet.getRange(7, 2);
-    
-    const elt = eltCell.getValue();
-    const dept = deptCell.getValue();
-    
-    if (elt) additionalFilters.elt = elt;
-    if (dept) additionalFilters.department = dept;
-  }
   
   // Build table: Site/Metric as rows, Periods as columns
   const headerRow = ["Site / Metric"].concat(periods.map(p => p.label));
@@ -1230,10 +1239,8 @@ function generateHeadcountMetrics() {
       const cacheKey = `${site}|${period.label}`;
       if (!metricsCache[cacheKey]) {
         try {
-          // Combine site filter with any other filters from FilterConfig
+          // Headcount Metrics is structured by site, so only filter by site
           const periodFilters = { site: site };
-          if (additionalFilters.elt) periodFilters.elt = additionalFilters.elt;
-          if (additionalFilters.department) periodFilters.department = additionalFilters.department;
           metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
         } catch (error) {
           Logger.log(`Error calculating metrics for ${site} in ${period.label}: ${error.message}`);
@@ -1338,6 +1345,214 @@ function generateHeadcountMetrics() {
 }
 
 /**
+ * Generates ELT-wise headcount metrics month-on-month
+ * Creates a table with ELTs and Metrics as rows and Months/Years as columns
+ * Metrics include: Opening HC, Closing HC, Average HC, Hires, Terminations, Regrettable Terms, Non-Regrettable Terms, Retention %, Turnover %, Regrettable %
+ * Can filter by Termination Reason
+ */
+function generateELTMetrics() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let eltSheet = ss.getSheetByName("ELT Metrics");
+  const isNewSheet = !eltSheet;
+  
+  if (!eltSheet) {
+    eltSheet = ss.insertSheet("ELT Metrics");
+  }
+  
+  const rawDataSheet = ss.getSheetByName("RawData");
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  // Get unique ELTs
+  const uniqueValues = getUniqueFilterValues();
+  const elts = uniqueValues.elts;
+  
+  if (elts.length === 0) {
+    SpreadsheetApp.getUi().alert("No ELTs found in data.");
+    return;
+  }
+  
+  // Get filters from FilterConfig
+  let terminationReasonFilter = null;
+  const filterConfigSheet = ss.getSheetByName("FilterConfig");
+  if (filterConfigSheet) {
+    const termReasonCell = filterConfigSheet.getRange(6, 2); // Row 6 for Termination Reason
+    const termReason = termReasonCell.getValue();
+    if (termReason) {
+      terminationReasonFilter = String(termReason).trim();
+    }
+  }
+  
+  // Generate periods (monthly from Jan 2024 to current month)
+  // Check for time period filters in FilterConfig
+  let allPeriods = [];
+  const startDate = new Date(2024, 0, 1); // Jan 2024
+  const endDate = new Date();
+  
+  let currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    const periodStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    
+    if (periodStart <= endDate) {
+      allPeriods.push({
+        start: periodStart,
+        end: periodEnd,
+        label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy"),
+        year: periodStart.getFullYear(),
+        quarter: Math.floor(periodStart.getMonth() / 3) + 1,
+        half: periodStart.getMonth() < 6 ? 1 : 2
+      });
+    }
+    
+    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+  }
+  
+  // Apply time period filters from FilterConfig
+  let periods = allPeriods;
+  if (filterConfigSheet) {
+    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    
+    if (yearFilter) {
+      const filterYear = parseInt(yearFilter, 10);
+      periods = periods.filter(p => p.year === filterYear);
+    } else if (halvesFilter) {
+      const halfNum = parseInt(halvesFilter.replace("H", ""), 10);
+      periods = periods.filter(p => p.half === halfNum);
+    } else if (quarterFilter) {
+      const quarterNum = parseInt(quarterFilter.replace("Q", ""), 10);
+      periods = periods.filter(p => p.quarter === quarterNum);
+    }
+  }
+  
+  // Build table: ELT/Metric as rows, Periods as columns
+  const headerRow = ["ELT / Metric"].concat(periods.map(p => p.label));
+  
+  // Define metrics to calculate for each ELT
+  const metricLabels = [
+    "Opening HC",
+    "Closing HC",
+    "Average Headcount",
+    "Hires",
+    "Terminations",
+    "Regrettable Terms",
+    "Non-Regrettable Terms",
+    "Retention %",
+    "Turnover %",
+    "Regrettable %"
+  ];
+  
+  // OPTIMIZATION: Cache metrics calculations to avoid redundant processing
+  const metricsCache = {};
+  
+  // Pre-calculate all metrics for each ELT/period combination once
+  elts.forEach(elt => {
+    periods.forEach(period => {
+      const cacheKey = `${elt}|${period.label}`;
+      if (!metricsCache[cacheKey]) {
+        try {
+          // ELT Metrics is structured by ELT, filter by termination reason if specified
+          const periodFilters = { elt: elt };
+          if (terminationReasonFilter) {
+            periodFilters.terminationReason = terminationReasonFilter;
+          }
+          metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
+        } catch (error) {
+          Logger.log(`Error calculating metrics for ${elt} in ${period.label}: ${error.message}`);
+          metricsCache[cacheKey] = null;
+        }
+      }
+    });
+  });
+  
+  // Build data rows using cached metrics
+  const dataRows = [];
+  elts.forEach((elt, eltIndex) => {
+    // Add header row at the start of each ELT section
+    dataRows.push(headerRow);
+    
+    // For each ELT, create rows for each metric
+    metricLabels.forEach((metricLabel, metricIndex) => {
+      const row = [`${elt} - ${metricLabel}`];
+      
+      periods.forEach(period => {
+        const cacheKey = `${elt}|${period.label}`;
+        const metrics = metricsCache[cacheKey];
+        
+        if (!metrics) {
+          row.push(metricIndex < 7 ? "" : 0);
+          return;
+        }
+        
+        let value = 0;
+        switch(metricIndex) {
+          case 0: // Opening HC
+            value = metrics.openingHC;
+            break;
+          case 1: // Closing HC
+            value = metrics.closingHC;
+            break;
+          case 2: // Average Headcount - round to nearest integer
+            value = Math.round((metrics.openingHC + metrics.closingHC) / 2);
+            break;
+          case 3: // Hires
+            value = metrics.hires;
+            break;
+          case 4: // Terminations
+            value = metrics.terms;
+            break;
+          case 5: // Regrettable Terms
+            value = metrics.regrettableTerms;
+            break;
+          case 6: // Non-Regrettable Terms
+            value = metrics.terms - metrics.regrettableTerms;
+            break;
+          case 7: // Retention %
+            value = metrics.retention;
+            break;
+          case 8: // Turnover %
+            value = metrics.turnover;
+            break;
+          case 9: // Regrettable %
+            value = metrics.regrettableTurnover;
+            break;
+        }
+        // For count metrics (0-6), use blank instead of 0. For percentages (7-9), keep 0
+        if (metricIndex < 7 && value === 0) {
+          row.push(""); // Blank for zero counts
+        } else {
+          row.push(value);
+        }
+      });
+      dataRows.push(row);
+    });
+    
+    // Add 1 blank row after each ELT (except the last one)
+    if (eltIndex < elts.length - 1) {
+      const blankRow = [""].concat(new Array(periods.length).fill(""));
+      dataRows.push(blankRow);
+    }
+  });
+  
+  // Write data in one batch operation - only values, preserve all user formatting
+  if (dataRows.length > 0) {
+    try {
+      eltSheet.getRange(1, 1, dataRows.length, headerRow.length).setValues(dataRows);
+    } catch (error) {
+      Logger.log(`Error writing ELT metrics: ${error.message}`);
+      SpreadsheetApp.getUi().alert(`Error generating ELT metrics: ${error.message}`);
+      return;
+    }
+  }
+  
+  SpreadsheetApp.getUi().alert(`ELT Metrics generated for ${elts.length} ELTs with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
+}
+
+/**
  * Generates job level headcount as of today with site-level breakdowns
  * Creates tables with job levels sorted in specific order, plus charts
  */
@@ -1381,10 +1596,13 @@ function generateJobLevelHeadcount() {
     return null;
   };
   
-  // Count unique employees by job level and site (as of today)
+  // Count unique employees by job level, site, and ELT (as of today)
   // Structure: jobLevel -> site -> Set of employee names
+  // Structure: jobLevel -> elt -> Set of employee names
   const jobLevelSiteCounts = new Map();
+  const jobLevelELTCounts = new Map();
   const allSites = new Set();
+  const allELTs = new Set();
   
   rows.forEach(row => {
     const empName = String(row[COLUMN_INDICES.EMP_NAME] || "").trim();
@@ -1394,15 +1612,17 @@ function generateJobLevelHeadcount() {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     const jobLevel = String(row[COLUMN_INDICES.JOB_LEVEL] || "").trim();
     const site = String(row[COLUMN_INDICES.SITE] || "").trim();
+    const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
     
     // Check if employee is active as of today
     if (!startDate || startDate > today) return; // Not started yet
     if (termDate && termDate <= today) return; // Already terminated
     
-    if (!jobLevel || !site) return;
+    if (!jobLevel || !site || !elt) return;
     
-    // Track all sites
+    // Track all sites and ELTs
     allSites.add(site);
+    allELTs.add(elt);
     
     // Count unique employees by job level and site
     if (!jobLevelSiteCounts.has(jobLevel)) {
@@ -1413,10 +1633,21 @@ function generateJobLevelHeadcount() {
       siteMap.set(site, new Set());
     }
     siteMap.get(site).add(empName);
+    
+    // Count unique employees by job level and ELT
+    if (!jobLevelELTCounts.has(jobLevel)) {
+      jobLevelELTCounts.set(jobLevel, new Map());
+    }
+    const eltMap = jobLevelELTCounts.get(jobLevel);
+    if (!eltMap.has(elt)) {
+      eltMap.set(elt, new Set());
+    }
+    eltMap.get(elt).add(empName);
   });
   
-  // Get sorted sites
+  // Get sorted sites and ELTs
   const sortedSites = Array.from(allSites).sort();
+  const sortedELTs = Array.from(allELTs).sort();
   
   // Get all job levels that exist in data, sorted according to specified order
   const allJobLevels = Array.from(jobLevelSiteCounts.keys());
@@ -1481,9 +1712,36 @@ function generateJobLevelHeadcount() {
     jobLevelSheet.getRange(siteBreakdownStartRow + 1, 1, siteBreakdownRows.length, siteHeaders.length).setValues(siteBreakdownRows);
   }
   
+  // Build ELT Breakdown table (Job Level, ELT1, ELT2, ..., Total)
+  const eltBreakdownStartRow = siteBreakdownStartRow + siteBreakdownRows.length + 4; // Leave 2 blank rows after site breakdown
+  const eltHeaders = ["Job Level"].concat(sortedELTs).concat(["Total"]);
+  jobLevelSheet.getRange(eltBreakdownStartRow, 1, 1, eltHeaders.length).setValues([eltHeaders]);
+  if (isNewSheet) {
+    jobLevelSheet.getRange(eltBreakdownStartRow, 1, 1, eltHeaders.length).setFontWeight("bold");
+  }
+  
+  const eltBreakdownRows = sortedJobLevels.map(level => {
+    const eltMap = jobLevelELTCounts.get(level);
+    const row = [level];
+    let total = 0;
+    
+    sortedELTs.forEach(elt => {
+      const count = eltMap.has(elt) ? eltMap.get(elt).size : 0;
+      row.push(count);
+      total += count;
+    });
+    
+    row.push(total);
+    return row;
+  });
+  
+  if (eltBreakdownRows.length > 0) {
+    jobLevelSheet.getRange(eltBreakdownStartRow + 1, 1, eltBreakdownRows.length, eltHeaders.length).setValues(eltBreakdownRows);
+  }
+  
   // Auto-resize columns if new sheet
   if (isNewSheet) {
-    jobLevelSheet.autoResizeColumns(1, Math.max(2, siteHeaders.length));
+    jobLevelSheet.autoResizeColumns(1, Math.max(2, Math.max(siteHeaders.length, eltHeaders.length)));
   }
   
   // Create or update charts
@@ -1491,6 +1749,7 @@ function generateJobLevelHeadcount() {
     const existingCharts = jobLevelSheet.getCharts();
     let overallChart = null;
     let siteChart = null;
+    let eltChart = null;
     
     // Find existing charts by title
     existingCharts.forEach(chart => {
@@ -1501,6 +1760,8 @@ function generateJobLevelHeadcount() {
           overallChart = chart;
         } else if (title === 'Job Level Headcount by Site') {
           siteChart = chart;
+        } else if (title === 'Job Level Headcount by ELT') {
+          eltChart = chart;
         }
       } catch (e) {
         // Skip charts that can't be read
@@ -1570,12 +1831,45 @@ function generateJobLevelHeadcount() {
         .build();
       jobLevelSheet.insertChart(newSiteChart);
     }
+    
+    // Chart 3: ELT Breakdown (Stacked Column Chart)
+    // Exclude the "Total" column - only include Job Level + ELT columns
+    const eltChartNumCols = sortedELTs.length + 1; // Job Level + ELTs (excluding Total)
+    const eltChartRange = jobLevelSheet.getRange(eltBreakdownStartRow, 1, eltBreakdownRows.length + 1, eltChartNumCols);
+    
+    if (eltChart) {
+      // Update existing chart - preserve position and formatting
+      try {
+        const updatedChart = eltChart.modify()
+          .clearRanges()
+          .addRange(eltChartRange)
+          .build();
+        jobLevelSheet.updateChart(updatedChart);
+      } catch (e) {
+        Logger.log(`Error updating ELT chart: ${e.message}`);
+      }
+    } else {
+      // Create new chart
+      const newELTChart = jobLevelSheet.newChart()
+        .setChartType(Charts.ChartType.COLUMN)
+        .addRange(eltChartRange)
+        .setPosition(eltBreakdownStartRow + eltBreakdownRows.length + 2, 4, 0, 0)
+        .setOption('title', 'Job Level Headcount by ELT')
+        .setOption('isStacked', true)
+        .setOption('legend.position', 'right')
+        .setOption('hAxis.title', 'Job Level')
+        .setOption('vAxis.title', 'Headcount')
+        .setOption('width', 800)
+        .setOption('height', 400)
+        .build();
+      jobLevelSheet.insertChart(newELTChart);
+    }
   } catch (e) {
     Logger.log(`Error creating/updating charts: ${e.message}`);
     // Charts are optional, continue even if they fail
   }
   
-  SpreadsheetApp.getUi().alert(`Job Level Headcount generated for ${sortedJobLevels.length} job levels across ${sortedSites.length} sites as of today.`);
+  SpreadsheetApp.getUi().alert(`Job Level Headcount generated for ${sortedJobLevels.length} job levels across ${sortedSites.length} sites and ${sortedELTs.length} ELTs as of today.`);
 }
 
 /**
@@ -1753,25 +2047,18 @@ function generateTerminationReasonsTable() {
   let filters = {};
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
-    const siteCell = filterConfigSheet.getRange("B2"); // Row 2 for Site
-    const eltCell = filterConfigSheet.getRange("B3");  // Row 3 for ELT
-    const deptCell = filterConfigSheet.getRange("B4"); // Row 4 for Department
-    
-    const site = siteCell.getValue();
+    const eltCell = filterConfigSheet.getRange(5, 2); // Row 5 for ELT
     const elt = eltCell.getValue();
-    const dept = deptCell.getValue();
     
-    if (site) filters.site = site;
     if (elt) filters.elt = elt;
-    if (dept) filters.department = dept;
   }
   
   // Get time period filters
   let timePeriodFilter = null;
   if (filterConfigSheet) {
-    const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(12, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(13, 2).getValue(); // Quarter filter
+    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
@@ -1829,16 +2116,12 @@ function generateTerminationReasonsTable() {
     
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
-    const site = String(row[COLUMN_INDICES.SITE] || "").trim();
     const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
-    const department = String(row[COLUMN_INDICES.DEPARTMENT] || "").trim();
     
     if (!termDate || !termReason) return; // Skip if no termination date or reason
     
     // Apply filters
-    if (filters.site && site !== filters.site) return;
     if (filters.elt && elt !== filters.elt) return;
-    if (filters.department && department !== filters.department) return;
     
     // Apply time period filter
     if (!matchesTimePeriod(termDate)) return;
@@ -1891,9 +2174,7 @@ function generateTerminationReasonsTable() {
   const filterInfoRow = dataRows.length + 3;
   if (Object.keys(filters).length > 0 || timePeriodFilter) {
     const filterInfo = ["Filters Applied:"];
-    if (filters.site) filterInfo.push(`Site: ${filters.site}`);
     if (filters.elt) filterInfo.push(`ELT: ${filters.elt}`);
-    if (filters.department) filterInfo.push(`Department: ${filters.department}`);
     if (timePeriodFilter) {
       if (timePeriodFilter.type === 'year') {
         filterInfo.push(`Year: ${timePeriodFilter.value}`);
