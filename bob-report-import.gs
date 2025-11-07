@@ -79,6 +79,153 @@ function onOpen() {
 }
 
 /**
+ * onEdit trigger to automatically update ELT chart when dropdown filter changes
+ * This function is called automatically when any cell is edited in the spreadsheet
+ */
+function onEdit(e) {
+  const sheet = e.source.getActiveSheet();
+  const range = e.range;
+  
+  // Check if the edit is in the "Job Level Headcount" sheet
+  if (sheet.getName() !== "Job Level Headcount") {
+    return;
+  }
+  
+  // Check if the edit is in the ELT filter dropdown cell (column B, row with "Filter by ELT:")
+  // We need to find which row has "Filter by ELT:" label
+  try {
+    const dataRange = sheet.getDataRange();
+    const values = dataRange.getValues();
+    
+    // Find the row with "Filter by ELT:" label
+    let eltFilterRow = null;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0] && String(values[i][0]).includes("Filter by ELT:")) {
+        eltFilterRow = i + 1; // Convert to 1-indexed
+        break;
+      }
+    }
+    
+    // If we found the filter row and the edit is in column B of that row
+    if (eltFilterRow && range.getRow() === eltFilterRow && range.getColumn() === 2) {
+      // Update the ELT chart
+      updateELTChart(sheet, eltFilterRow);
+    }
+  } catch (error) {
+    Logger.log(`Error in onEdit trigger: ${error.message}`);
+    // Don't show error to user, just log it
+  }
+}
+
+/**
+ * Updates the ELT chart based on the dropdown filter selection
+ */
+function updateELTChart(jobLevelSheet, eltFilterRow) {
+  try {
+    const filterValue = jobLevelSheet.getRange(eltFilterRow, 2).getValue();
+    
+    // Find the ELT chart
+    const existingCharts = jobLevelSheet.getCharts();
+    let eltChart = null;
+    
+    existingCharts.forEach(chart => {
+      try {
+        const options = chart.getOptions();
+        const title = options ? options.title : null;
+        if (title && title.includes('Job Level Headcount by ELT')) {
+          eltChart = chart;
+        }
+      } catch (e) {
+        Logger.log(`Error reading chart: ${e.message}`);
+      }
+    });
+    
+    if (!eltChart) {
+      Logger.log("ELT chart not found, skipping update");
+      return;
+    }
+    
+    // Find the filtered data range
+    // The filtered data table should be below the ELT breakdown table
+    const dataRange = jobLevelSheet.getDataRange();
+    const values = dataRange.getValues();
+    
+    // Find the row with "Filtered Data for Chart:" or find the filtered headers row
+    let filteredHeadersRow = null;
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][0] && String(values[i][0]).includes("Filtered Data for Chart:")) {
+        filteredHeadersRow = i + 2; // +2 because header is on next row
+        break;
+      }
+    }
+    
+    if (!filteredHeadersRow) {
+      Logger.log("Filtered data range not found, skipping update");
+      return;
+    }
+    
+    // Count how many job levels we have (find the ELT breakdown table first)
+    let eltBreakdownStartRow = null;
+    for (let i = 0; i < values.length; i++) {
+      const row = values[i];
+      // Look for a row that has "Job Level" as first cell and ELT names in subsequent cells
+      if (row[0] === "Job Level" && row.length > 2) {
+        eltBreakdownStartRow = i + 1;
+        break;
+      }
+    }
+    
+    if (!eltBreakdownStartRow) {
+      Logger.log("ELT breakdown table not found, skipping update");
+      return;
+    }
+    
+    // Count job level rows (until we hit an empty row or end of data)
+    let jobLevelCount = 0;
+    for (let i = eltBreakdownStartRow; i < values.length; i++) {
+      if (values[i][0] && String(values[i][0]).trim()) {
+        jobLevelCount++;
+      } else {
+        break;
+      }
+    }
+    jobLevelCount--; // Subtract 1 for header row
+    
+    // Determine how many columns to include based on filter
+    // If "All", include all ELT columns. Otherwise, count non-empty columns in filtered data
+    let numCols = 2; // At least Job Level + 1 ELT column
+    if (filterValue === "All") {
+      // Count ELT columns from the original breakdown table
+      const headerRow = values[eltBreakdownStartRow - 1];
+      numCols = headerRow.length - 1; // Exclude "Total" column
+    } else {
+      // When filtering to one ELT, we need Job Level + that ELT column
+      // But the filtered table still has all columns (with formulas showing blanks)
+      // So we'll use the same number of columns as the original table
+      const headerRow = values[eltBreakdownStartRow - 1];
+      numCols = headerRow.length - 1; // Exclude "Total" column
+    }
+    
+    // Create the filtered chart range
+    const filteredChartRange = jobLevelSheet.getRange(filteredHeadersRow, 1, jobLevelCount + 1, numCols);
+    
+    // Update the chart
+    try {
+      const updatedChart = eltChart.modify()
+        .clearRanges()
+        .addRange(filteredChartRange)
+        .build();
+      jobLevelSheet.updateChart(updatedChart);
+      Logger.log(`ELT chart updated for filter: ${filterValue}`);
+    } catch (e) {
+      Logger.log(`Error updating ELT chart: ${e.message}`);
+    }
+  } catch (error) {
+    Logger.log(`Error in updateELTChart: ${error.message}`);
+  }
+}
+
+/**
  * Column indices mapping based on Bob import structure
  * Based on formulas: C:C (Start Date), O:O (Termination Date), Q:Q (Leave/Termination Type)
  * Adjust these if your column structure differs
@@ -678,17 +825,19 @@ function updateFilterOptions() {
   filterSheet.getRange(1, 1).setFontWeight("bold");
   filterSheet.getRange(1, 1).setFontSize(12);
   
-  filterSheet.getRange(3, 1).setValue("Filters for 'ELT Metrics' and 'Termination Reasons' (ELT, Termination Reason):");
+  filterSheet.getRange(3, 1).setValue("Available Values for Reference:");
   filterSheet.getRange(3, 1).setFontWeight("bold");
   filterSheet.getRange(3, 1).setFontSize(11);
   
   // Write headers
-  filterSheet.getRange(4, 1, 1, 2).setValues([["ELT", "Termination Reason"]]);
-  filterSheet.getRange(4, 1, 1, 2).setFontWeight("bold");
+  filterSheet.getRange(4, 1, 1, 4).setValues([["Site", "ELT", "Department", "Termination Reason"]]);
+  filterSheet.getRange(4, 1, 1, 4).setFontWeight("bold");
   
   // Find max length
   const maxLength = Math.max(
+    uniqueValues.sites.length,
     uniqueValues.elts.length,
+    uniqueValues.departments.length,
     uniqueValues.terminationReasons.length
   );
   
@@ -697,26 +846,27 @@ function updateFilterOptions() {
     const values = [];
     for (let i = 0; i < maxLength; i++) {
       values.push([
+        uniqueValues.sites[i] || "",
         uniqueValues.elts[i] || "",
+        uniqueValues.departments[i] || "",
         uniqueValues.terminationReasons[i] || ""
       ]);
     }
-    filterSheet.getRange(5, 1, maxLength, 2).setValues(values);
+    filterSheet.getRange(5, 1, maxLength, 4).setValues(values);
   }
   
   // Auto-resize columns
-  filterSheet.autoResizeColumns(1, 2);
+  filterSheet.autoResizeColumns(1, 4);
   
   // Add instructions
   const instructionRow = maxLength + 6;
   filterSheet.getRange(instructionRow, 1).setValue("Instructions:");
   filterSheet.getRange(instructionRow, 1).setFontWeight("bold");
-  filterSheet.getRange(instructionRow + 1, 1).setValue("1. Review the unique values above");
-  filterSheet.getRange(instructionRow + 2, 1).setValue("2. Use these values in FilterConfig sheet to filter data");
-  filterSheet.getRange(instructionRow + 3, 1).setValue("3. ELT filter applies to: ELT Metrics and Termination Reasons");
-  filterSheet.getRange(instructionRow + 4, 1).setValue("4. Termination Reason filter applies to: ELT Metrics and Termination Reasons");
+  filterSheet.getRange(instructionRow + 1, 1).setValue("1. Review the unique values above for reference");
+  filterSheet.getRange(instructionRow + 2, 1).setValue("2. Time Period filters are configured in FilterConfig sheet");
+  filterSheet.getRange(instructionRow + 3, 1).setValue("3. Time Period filter applies to: Overall Data, Headcount Metrics & ELT Metrics");
   
-  SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.elts.length} ELTs, ${uniqueValues.terminationReasons.length} termination reasons.`);
+  SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.sites.length} sites, ${uniqueValues.elts.length} ELTs, ${uniqueValues.departments.length} departments, ${uniqueValues.terminationReasons.length} termination reasons.`);
 }
 
 /**
@@ -740,9 +890,9 @@ function generateOverallData() {
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
     // Get time period filters only (for Overall Data)
-    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
@@ -1002,7 +1152,8 @@ function createFilterConfigSheet() {
   configSheet.getRange(1, 1).setFontWeight("bold");
   configSheet.getRange(1, 1).setFontSize(12);
   
-  configSheet.getRange(3, 1).setValue("Filters for 'ELT Metrics' and 'Termination Reasons' (ELT, Termination Reason):");
+  // Time Period Filters for Overall Data, Headcount Metrics, and ELT Metrics
+  configSheet.getRange(3, 1).setValue("Time Period Filter (for 'Overall Data', 'Headcount Metrics', and 'ELT Metrics'):");
   configSheet.getRange(3, 1).setFontWeight("bold");
   configSheet.getRange(3, 1).setFontSize(11);
   
@@ -1010,33 +1161,9 @@ function createFilterConfigSheet() {
   configSheet.getRange(4, 1, 1, 2).setValues([["Filter", "Value"]]);
   configSheet.getRange(4, 1, 1, 2).setFontWeight("bold");
   
-  configSheet.getRange(5, 1).setValue("ELT:");
-  configSheet.getRange(6, 1).setValue("Termination Reason:");
-  
-  // Add data validation dropdowns
-  if (uniqueValues.elts.length > 0) {
-    const eltRule = SpreadsheetApp.newDataValidation()
-      .requireValueInList([""].concat(uniqueValues.elts), true)
-      .build();
-    configSheet.getRange(5, 2).setDataValidation(eltRule);
-  }
-  
-  if (uniqueValues.terminationReasons.length > 0) {
-    const termReasonRule = SpreadsheetApp.newDataValidation()
-      .requireValueInList([""].concat(uniqueValues.terminationReasons), true)
-      .build();
-    configSheet.getRange(6, 2).setDataValidation(termReasonRule);
-  }
-  
-  // Time Period Filters for Overall Data, Headcount Metrics, and ELT Metrics
-  configSheet.getRange(8, 1).setValue("Time Period Filter (for 'Overall Data', 'Headcount Metrics', and 'ELT Metrics'):");
-  configSheet.getRange(8, 1).setFontWeight("bold");
-  configSheet.getRange(8, 1).setFontSize(11);
-  
-  configSheet.getRange(9, 1).setValue("Filter Type:");
-  configSheet.getRange(10, 1).setValue("Year:");
-  configSheet.getRange(11, 1).setValue("Halves:");
-  configSheet.getRange(12, 1).setValue("Quarter:");
+  configSheet.getRange(5, 1).setValue("Year:");
+  configSheet.getRange(6, 1).setValue("Halves:");
+  configSheet.getRange(7, 1).setValue("Quarter:");
   
   // Year dropdown (2024, 2025, 2026, etc.)
   const currentYear = new Date().getFullYear();
@@ -1048,37 +1175,36 @@ function createFilterConfigSheet() {
   const yearRule = SpreadsheetApp.newDataValidation()
     .requireValueInList([""].concat(years), true)
     .build();
-  configSheet.getRange(10, 2).setDataValidation(yearRule);
-  configSheet.getRange(10, 3).setValue("(e.g., 2024 or 2025)");
-  configSheet.getRange(10, 3).setFontStyle("italic");
-  configSheet.getRange(10, 3).setFontColor("#666666");
+  configSheet.getRange(5, 2).setDataValidation(yearRule);
+  configSheet.getRange(5, 3).setValue("(e.g., 2024 or 2025)");
+  configSheet.getRange(5, 3).setFontStyle("italic");
+  configSheet.getRange(5, 3).setFontColor("#666666");
   
   // Halves dropdown (H1 = Jan-Jun, H2 = Jul-Dec)
   const halvesRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(["", "H1", "H2"], true)
     .build();
-  configSheet.getRange(11, 2).setDataValidation(halvesRule);
-  configSheet.getRange(11, 3).setValue("(e.g., H1 or H2)");
-  configSheet.getRange(11, 3).setFontStyle("italic");
-  configSheet.getRange(11, 3).setFontColor("#666666");
+  configSheet.getRange(6, 2).setDataValidation(halvesRule);
+  configSheet.getRange(6, 3).setValue("(e.g., H1 or H2)");
+  configSheet.getRange(6, 3).setFontStyle("italic");
+  configSheet.getRange(6, 3).setFontColor("#666666");
   
   // Quarter dropdown
   const quarterRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(["", "Q1", "Q2", "Q3", "Q4"], true)
     .build();
-  configSheet.getRange(12, 2).setDataValidation(quarterRule);
-  configSheet.getRange(12, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
-  configSheet.getRange(12, 3).setFontStyle("italic");
-  configSheet.getRange(12, 3).setFontColor("#666666");
+  configSheet.getRange(7, 2).setDataValidation(quarterRule);
+  configSheet.getRange(7, 3).setValue("(e.g., Q1, Q2, Q3, Q4)");
+  configSheet.getRange(7, 3).setFontStyle("italic");
+  configSheet.getRange(7, 3).setFontColor("#666666");
   
   // Add instructions
-  configSheet.getRange(14, 1).setValue("Instructions:");
-  configSheet.getRange(14, 1).setFontWeight("bold");
-  configSheet.getRange(15, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
-  configSheet.getRange(16, 1).setValue("2. For Overall Data, Headcount Metrics & ELT Metrics: Use Time Period filters to limit date range");
-  configSheet.getRange(17, 1).setValue("3. Time Period: Select Year OR Halves OR Quarter");
-  configSheet.getRange(18, 1).setValue("4. Run 'Generate Overall Data', 'Generate Headcount Metrics', or 'Generate ELT Metrics' from menu");
-  configSheet.getRange(19, 1).setValue("5. Filters apply: ELT/Term Reason → ELT Metrics & Termination Reasons; Time Period → Overall Data, Headcount Metrics & ELT Metrics");
+  configSheet.getRange(9, 1).setValue("Instructions:");
+  configSheet.getRange(9, 1).setFontWeight("bold");
+  configSheet.getRange(10, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
+  configSheet.getRange(11, 1).setValue("2. Time Period filter applies to: Overall Data, Headcount Metrics & ELT Metrics");
+  configSheet.getRange(12, 1).setValue("3. Time Period: Select Year OR Halves OR Quarter");
+  configSheet.getRange(13, 1).setValue("4. Run 'Generate Overall Data', 'Generate Headcount Metrics', or 'Generate ELT Metrics' from menu");
   
   configSheet.autoResizeColumns(1, 3);
   
@@ -1189,9 +1315,9 @@ function generateHeadcountMetrics() {
   let periods = allPeriods;
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
-    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       // Filter by year
@@ -1374,16 +1500,8 @@ function generateELTMetrics() {
     return;
   }
   
-  // Get filters from FilterConfig
-  let terminationReasonFilter = null;
-  const filterConfigSheet = ss.getSheetByName("FilterConfig");
-  if (filterConfigSheet) {
-    const termReasonCell = filterConfigSheet.getRange(6, 2); // Row 6 for Termination Reason
-    const termReason = termReasonCell.getValue();
-    if (termReason) {
-      terminationReasonFilter = String(termReason).trim();
-    }
-  }
+  // ELT Metrics shows all ELTs - no filters needed (structured by ELT)
+  // Time period filters are applied below
   
   // Generate periods (monthly from Jan 2024 to current month)
   // Check for time period filters in FilterConfig
@@ -1412,10 +1530,11 @@ function generateELTMetrics() {
   
   // Apply time period filters from FilterConfig
   let periods = allPeriods;
+  const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
-    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       const filterYear = parseInt(yearFilter, 10);
@@ -1455,11 +1574,8 @@ function generateELTMetrics() {
       const cacheKey = `${elt}|${period.label}`;
       if (!metricsCache[cacheKey]) {
         try {
-          // ELT Metrics is structured by ELT, filter by termination reason if specified
+          // ELT Metrics is structured by ELT
           const periodFilters = { elt: elt };
-          if (terminationReasonFilter) {
-            periodFilters.terminationReason = terminationReasonFilter;
-          }
           metricsCache[cacheKey] = calculateHRMetrics(period.start, period.end, periodFilters);
         } catch (error) {
           Logger.log(`Error calculating metrics for ${elt} in ${period.label}: ${error.message}`);
@@ -2156,22 +2272,15 @@ function generateTerminationReasonsTable() {
   
   const rows = data.slice(1);
   
-  // Get filters from FilterConfig sheet
-  let filters = {};
+  // No filters needed - we'll show breakdowns by Site and ELT, plus overall
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
-  if (filterConfigSheet) {
-    const eltCell = filterConfigSheet.getRange(5, 2); // Row 5 for ELT
-    const elt = eltCell.getValue();
-    
-    if (elt) filters.elt = elt;
-  }
   
   // Get time period filters
   let timePeriodFilter = null;
   if (filterConfigSheet) {
-    const yearFilter = filterConfigSheet.getRange(10, 2).getValue(); // Year filter
-    const halvesFilter = filterConfigSheet.getRange(11, 2).getValue(); // Halves filter
-    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    const yearFilter = filterConfigSheet.getRange(5, 2).getValue(); // Year filter
+    const halvesFilter = filterConfigSheet.getRange(6, 2).getValue(); // Halves filter
+    const quarterFilter = filterConfigSheet.getRange(7, 2).getValue(); // Quarter filter
     
     if (yearFilter) {
       timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
@@ -2221,7 +2330,9 @@ function generateTerminationReasonsTable() {
   };
   
   // Count terminations by reason with filters applied
-  const reasonCounts = new Map();
+  const overallReasonCounts = new Map(); // Overall counts: reason -> Set of employee names
+  const siteReasonCounts = new Map(); // Site counts: site -> Map(reason -> Set of employee names)
+  const eltReasonCounts = new Map(); // ELT counts: elt -> Map(reason -> Set of employee names)
   
   rows.forEach(row => {
     const empName = String(row[COLUMN_INDICES.EMP_NAME] || "").trim();
@@ -2229,35 +2340,170 @@ function generateTerminationReasonsTable() {
     
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+    const site = String(row[COLUMN_INDICES.SITE] || "").trim();
     const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
     
     if (!termDate || !termReason) return; // Skip if no termination date or reason
     
-    // Apply filters
-    if (filters.elt && elt !== filters.elt) return;
-    
     // Apply time period filter
     if (!matchesTimePeriod(termDate)) return;
     
-    // Count unique employees by termination reason
-    if (!reasonCounts.has(termReason)) {
-      reasonCounts.set(termReason, new Set());
+    // Count unique employees by termination reason, site, and ELT
+    // Overall counts
+    if (!overallReasonCounts.has(termReason)) {
+      overallReasonCounts.set(termReason, new Set());
     }
-    reasonCounts.get(termReason).add(empName);
+    overallReasonCounts.get(termReason).add(empName);
+    
+    // Site counts
+    if (site) {
+      if (!siteReasonCounts.has(site)) {
+        siteReasonCounts.set(site, new Map());
+      }
+      const siteMap = siteReasonCounts.get(site);
+      if (!siteMap.has(termReason)) {
+        siteMap.set(termReason, new Set());
+      }
+      siteMap.get(termReason).add(empName);
+    }
+    
+    // ELT counts
+    if (elt) {
+      if (!eltReasonCounts.has(elt)) {
+        eltReasonCounts.set(elt, new Map());
+      }
+      const eltMap = eltReasonCounts.get(elt);
+      if (!eltMap.has(termReason)) {
+        eltMap.set(termReason, new Set());
+      }
+      eltMap.get(termReason).add(empName);
+    }
   });
   
-  // Sort by count (descending)
-  const sortedReasons = Array.from(reasonCounts.entries())
-    .sort((a, b) => b[1].size - a[1].size);
+  // Get unique sites and ELTs for breakdowns
+  const uniqueValues = getUniqueFilterValues();
+  const sortedSites = uniqueValues.sites.sort();
+  const sortedELTs = uniqueValues.elts.sort();
   
-  // Build table
-  const headers = ["Termination Reason", "Count", "Percentage"];
-  termReasonsSheet.getRange(1, 1, 1, 3).setValues([headers]);
-  if (isNewSheet) {
-    termReasonsSheet.getRange(1, 1, 1, 3).setFontWeight("bold");
+  let currentRow = 1;
+  
+  // Build Site breakdown tables
+  if (sortedSites.length > 0) {
+    termReasonsSheet.getRange(currentRow, 1).setValue("Termination Reasons by Site");
+    termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
+    termReasonsSheet.getRange(currentRow, 1).setFontSize(12);
+    currentRow++;
+    
+    sortedSites.forEach((site, siteIndex) => {
+      const siteMap = siteReasonCounts.get(site);
+      
+      if (siteMap && siteMap.size > 0) {
+        // Site header
+        termReasonsSheet.getRange(currentRow, 1).setValue(`${site}:`);
+        termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
+        currentRow++;
+        
+        // Headers
+        termReasonsSheet.getRange(currentRow, 1, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
+        termReasonsSheet.getRange(currentRow, 1, 1, 3).setFontWeight("bold");
+        currentRow++;
+        
+        // Sort reasons by count
+        const siteReasons = Array.from(siteMap.entries())
+          .sort((a, b) => b[1].size - a[1].size);
+        
+        const siteTotal = Array.from(siteMap.values()).reduce((sum, set) => sum + set.size, 0);
+        
+        const siteDataRows = siteReasons.map(([reason, empSet]) => {
+          const count = empSet.size;
+          const percentage = siteTotal > 0 ? count / siteTotal : 0;
+          return [reason, count, percentage];
+        });
+        
+        if (siteDataRows.length > 0) {
+          termReasonsSheet.getRange(currentRow, 1, siteDataRows.length, 3).setValues(siteDataRows);
+          termReasonsSheet.getRange(currentRow, 3, siteDataRows.length, 1).setNumberFormat("0.0%");
+          currentRow += siteDataRows.length;
+        }
+        
+        // Add blank row between sites
+        if (siteIndex < sortedSites.length - 1) {
+          currentRow++;
+        }
+      }
+    });
+    
+    // Add blank row before ELT section
+    currentRow += 2;
   }
   
-  const totalTerms = Array.from(reasonCounts.values()).reduce((sum, set) => sum + set.size, 0);
+  // Build ELT breakdown tables
+  if (sortedELTs.length > 0) {
+    termReasonsSheet.getRange(currentRow, 1).setValue("Termination Reasons by ELT");
+    termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
+    termReasonsSheet.getRange(currentRow, 1).setFontSize(12);
+    currentRow++;
+    
+    sortedELTs.forEach((elt, eltIndex) => {
+      const eltMap = eltReasonCounts.get(elt);
+      
+      if (eltMap && eltMap.size > 0) {
+        // ELT header
+        termReasonsSheet.getRange(currentRow, 1).setValue(`${elt}:`);
+        termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
+        currentRow++;
+        
+        // Headers
+        termReasonsSheet.getRange(currentRow, 1, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
+        termReasonsSheet.getRange(currentRow, 1, 1, 3).setFontWeight("bold");
+        currentRow++;
+        
+        // Sort reasons by count
+        const eltReasons = Array.from(eltMap.entries())
+          .sort((a, b) => b[1].size - a[1].size);
+        
+        const eltTotal = Array.from(eltMap.values()).reduce((sum, set) => sum + set.size, 0);
+        
+        const eltDataRows = eltReasons.map(([reason, empSet]) => {
+          const count = empSet.size;
+          const percentage = eltTotal > 0 ? count / eltTotal : 0;
+          return [reason, count, percentage];
+        });
+        
+        if (eltDataRows.length > 0) {
+          termReasonsSheet.getRange(currentRow, 1, eltDataRows.length, 3).setValues(eltDataRows);
+          termReasonsSheet.getRange(currentRow, 3, eltDataRows.length, 1).setNumberFormat("0.0%");
+          currentRow += eltDataRows.length;
+        }
+        
+        // Add blank row between ELTs
+        if (eltIndex < sortedELTs.length - 1) {
+          currentRow++;
+        }
+      }
+    });
+    
+    // Add blank row before overall section
+    currentRow += 2;
+  }
+  
+  // Build overall table
+  termReasonsSheet.getRange(currentRow, 1).setValue("Termination Reasons (Overall)");
+  termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
+  termReasonsSheet.getRange(currentRow, 1).setFontSize(12);
+  currentRow++;
+  
+  // Sort by count (descending)
+  const sortedReasons = Array.from(overallReasonCounts.entries())
+    .sort((a, b) => b[1].size - a[1].size);
+  
+  // Headers
+  termReasonsSheet.getRange(currentRow, 1, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
+  termReasonsSheet.getRange(currentRow, 1, 1, 3).setFontWeight("bold");
+  currentRow++;
+  
+  const totalTerms = Array.from(overallReasonCounts.values())
+    .reduce((sum, set) => sum + set.size, 0);
   
   const dataRows = sortedReasons.map(([reason, empSet]) => {
     const count = empSet.size;
@@ -2266,38 +2512,27 @@ function generateTerminationReasonsTable() {
   });
   
   if (dataRows.length > 0) {
-    termReasonsSheet.getRange(2, 1, dataRows.length, 3).setValues(dataRows);
-    
-    // Clear any extra rows if data shrunk
-    const existingLastRow = termReasonsSheet.getLastRow();
-    if (existingLastRow > dataRows.length + 1) {
-      const rowsToClear = existingLastRow - (dataRows.length + 1);
-      termReasonsSheet.getRange(dataRows.length + 2, 1, rowsToClear, 3).clearContent();
+    termReasonsSheet.getRange(currentRow, 1, dataRows.length, 3).setValues(dataRows);
+    termReasonsSheet.getRange(currentRow, 3, dataRows.length, 1).setNumberFormat("0.0%");
+    currentRow += dataRows.length;
+  }
+  
+  // Add filter info if time period filter is applied
+  if (timePeriodFilter) {
+    currentRow += 2;
+    const filterInfo = ["Filters Applied:"];
+    if (timePeriodFilter.type === 'year') {
+      filterInfo.push(`Year: ${timePeriodFilter.value}`);
+    } else if (timePeriodFilter.type === 'halves') {
+      filterInfo.push(`Halves: H${timePeriodFilter.value}`);
+    } else if (timePeriodFilter.type === 'quarter') {
+      filterInfo.push(`Quarter: Q${timePeriodFilter.value}`);
     }
-    
-    // Format percentage column
-    termReasonsSheet.getRange(2, 3, dataRows.length, 1).setNumberFormat("0.0%");
+    termReasonsSheet.getRange(currentRow, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
   }
   
   if (isNewSheet) {
     termReasonsSheet.autoResizeColumns(1, 3);
-  }
-  
-  // Add filter info if filters are applied
-  const filterInfoRow = dataRows.length + 3;
-  if (Object.keys(filters).length > 0 || timePeriodFilter) {
-    const filterInfo = ["Filters Applied:"];
-    if (filters.elt) filterInfo.push(`ELT: ${filters.elt}`);
-    if (timePeriodFilter) {
-      if (timePeriodFilter.type === 'year') {
-        filterInfo.push(`Year: ${timePeriodFilter.value}`);
-      } else if (timePeriodFilter.type === 'halves') {
-        filterInfo.push(`Halves: H${timePeriodFilter.value}`);
-      } else if (timePeriodFilter.type === 'quarter') {
-        filterInfo.push(`Quarter: Q${timePeriodFilter.value}`);
-      }
-    }
-    termReasonsSheet.getRange(filterInfoRow, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
   }
   
   SpreadsheetApp.getUi().alert(`Termination Reasons table generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
