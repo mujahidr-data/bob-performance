@@ -811,16 +811,16 @@ function generateOverallData() {
   
   // Add formula descriptions
   const descriptions = [
-    ["Formula Descriptions:"],
-    [""],
+    ["Formula Descriptions:", ""],
+    ["", ""],
     ["Attrition %:", "Voluntary Terms / Average Headcount"],
     ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"],
-    [""],
+    ["", ""],
     ["Retention %:", "(Opening Headcount - Total Terms) / Opening Headcount"],
-    [""],
+    ["", ""],
     ["Turnover %:", "Total Terms / Average Headcount"],
     ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"],
-    [""],
+    ["", ""],
     ["Regrettable Turnover %:", "Regrettable Terms / Average Headcount"],
     ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"]
   ];
