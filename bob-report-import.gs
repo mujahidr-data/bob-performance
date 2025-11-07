@@ -2532,6 +2532,14 @@ function generateTerminationReasonsTable() {
   if (dataRows.length > 0) {
     termReasonsSheet.getRange(overallRow, OVERALL_COL_START, dataRows.length, 3).setValues(dataRows);
     termReasonsSheet.getRange(overallRow, OVERALL_COL_START + 2, dataRows.length, 1).setNumberFormat("0.0%");
+    
+    // Add horizontal borders to each data row
+    const borderColor = '#9900ff';
+    for (let i = 0; i < dataRows.length; i++) {
+      const rowRange = termReasonsSheet.getRange(overallRow + i, OVERALL_COL_START, 1, 3);
+      rowRange.setBorder(true, false, false, false, false, false, borderColor, SpreadsheetApp.BorderStyle.SOLID);
+    }
+    
     overallRow += dataRows.length;
   }
   
@@ -2571,6 +2579,14 @@ function generateTerminationReasonsTable() {
         if (siteDataRows.length > 0) {
           termReasonsSheet.getRange(siteRow, SITE_COL_START, siteDataRows.length, 3).setValues(siteDataRows);
           termReasonsSheet.getRange(siteRow, SITE_COL_START + 2, siteDataRows.length, 1).setNumberFormat("0.0%");
+          
+          // Add horizontal borders to each data row
+          const borderColor = '#9900ff';
+          for (let i = 0; i < siteDataRows.length; i++) {
+            const rowRange = termReasonsSheet.getRange(siteRow + i, SITE_COL_START, 1, 3);
+            rowRange.setBorder(true, false, false, false, false, false, borderColor, SpreadsheetApp.BorderStyle.SOLID);
+          }
+          
           siteRow += siteDataRows.length;
         }
         
@@ -2618,6 +2634,14 @@ function generateTerminationReasonsTable() {
         if (eltDataRows.length > 0) {
           termReasonsSheet.getRange(eltRow, ELT_COL_START, eltDataRows.length, 3).setValues(eltDataRows);
           termReasonsSheet.getRange(eltRow, ELT_COL_START + 2, eltDataRows.length, 1).setNumberFormat("0.0%");
+          
+          // Add horizontal borders to each data row
+          const borderColor = '#9900ff';
+          for (let i = 0; i < eltDataRows.length; i++) {
+            const rowRange = termReasonsSheet.getRange(eltRow + i, ELT_COL_START, 1, 3);
+            rowRange.setBorder(true, false, false, false, false, false, borderColor, SpreadsheetApp.BorderStyle.SOLID);
+          }
+          
           eltRow += eltDataRows.length;
         }
         
