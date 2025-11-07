@@ -66,7 +66,13 @@ function onOpen() {
     .addItem('Step 4: Create Filter Config Sheet', 'createFilterConfigSheet')
     .addSeparator()
     // Step 5: Generate metrics
-    .addItem('Step 5: Generate HR Metrics', 'generateHRMetrics')
+    .addItem('Step 5: Generate Overall Data', 'generateOverallData')
+    .addItem('Generate Headcount Metrics', 'generateHeadcountMetrics')
+    .addItem('Generate Job Level Headcount', 'generateJobLevelHeadcount')
+    .addItem('Generate Termination Reasons Table', 'generateTerminationReasonsTable')
+    .addSeparator()
+    // Data cleaning
+    .addItem('Map Termination Reasons', 'mapTerminationReasons')
     .addToUi();
 }
 
@@ -81,11 +87,19 @@ const COLUMN_INDICES = {
   START_DATE: 2,           // Column C (0-indexed: 2) - Start Date in YYYY-MM-DD format
   TERMINATION_DATE: 17,    // Column R (0-indexed: 17) - Termination date (blank for active employees)
   LEAVE_TERMINATION_TYPE: 19, // Column T (0-indexed: 19) - Leave and termination type
+  TERMINATION_REASON: 18,   // Column S (0-indexed: 18) - Reason for termination
+  JOB_LEVEL: 4,            // Column E (0-indexed: 4) - Job Level
   DEPARTMENT: 6,           // Column G (0-indexed: 6)
   ELT: 7,                  // Column H (0-indexed: 7)
   SITE: 8,                 // Column I (0-indexed: 8)
   STATUS: 16               // Column Q (0-indexed: 16) - Status (Active/Inactive, Employed/Terminated)
 };
+
+// Job level sorting order
+const JOB_LEVEL_ORDER = [
+  "L2 IC", "L3 IC", "L4 IC", "L5 IC", "L5.5 IC", "L6 IC", "L6.5 IC", "L7 IC",
+  "L4 Mgr", "L5 Mgr", "L5.5 Mgr", "L6 Mgr", "L6.5 Mgr", "L7 Mgr", "L8 Mgr", "L9 Mgr", "L10 Mgr"
+];
 
 /**
  * Reassigns ELT values based on business rules:
@@ -534,44 +548,6 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   };
 }
 
-/**
- * Gets unique values for filtering (Site, ELT, Department)
- * @returns {Object} Object with arrays of unique values
- */
-function getUniqueFilterValues() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const rawDataSheet = ss.getSheetByName("RawData");
-  
-  if (!rawDataSheet) {
-    return { sites: [], elts: [], departments: [] };
-  }
-  
-  const data = rawDataSheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    return { sites: [], elts: [], departments: [] };
-  }
-  
-  const rows = data.slice(1);
-  const sites = new Set();
-  const elts = new Set();
-  const departments = new Set();
-  
-  rows.forEach(row => {
-    const site = String(row[COLUMN_INDICES.SITE] || "").trim();
-    const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
-    const dept = String(row[COLUMN_INDICES.DEPARTMENT] || "").trim();
-    
-    if (site) sites.add(site);
-    if (elt) elts.add(elt);
-    if (dept) departments.add(dept);
-  });
-  
-  return {
-    sites: Array.from(sites).sort(),
-    elts: Array.from(elts).sort(),
-    departments: Array.from(departments).sort()
-  };
-}
 
 /**
  * Updates filter options sheet with unique values for vetting
@@ -590,14 +566,15 @@ function updateFilterOptions() {
   const uniqueValues = getUniqueFilterValues();
   
   // Write headers
-  filterSheet.getRange(1, 1, 1, 3).setValues([["Site", "ELT", "Department"]]);
-  filterSheet.getRange(1, 1, 1, 3).setFontWeight("bold");
+  filterSheet.getRange(1, 1, 1, 4).setValues([["Site", "ELT", "Department", "Termination Reason"]]);
+  filterSheet.getRange(1, 1, 1, 4).setFontWeight("bold");
   
   // Find max length
   const maxLength = Math.max(
     uniqueValues.sites.length,
     uniqueValues.elts.length,
-    uniqueValues.departments.length
+    uniqueValues.departments.length,
+    uniqueValues.terminationReasons.length
   );
   
   // Write data
@@ -607,35 +584,36 @@ function updateFilterOptions() {
       values.push([
         uniqueValues.sites[i] || "",
         uniqueValues.elts[i] || "",
-        uniqueValues.departments[i] || ""
+        uniqueValues.departments[i] || "",
+        uniqueValues.terminationReasons[i] || ""
       ]);
     }
-    filterSheet.getRange(2, 1, maxLength, 3).setValues(values);
+    filterSheet.getRange(2, 1, maxLength, 4).setValues(values);
   }
   
   // Auto-resize columns
-  filterSheet.autoResizeColumns(1, 3);
+  filterSheet.autoResizeColumns(1, 4);
   
   // Add instructions
   filterSheet.getRange(maxLength + 3, 1).setValue("Instructions:");
   filterSheet.getRange(maxLength + 4, 1).setValue("1. Review the unique values above");
-  filterSheet.getRange(maxLength + 5, 1).setValue("2. Use generateHRMetrics() function with filters parameter");
-  filterSheet.getRange(maxLength + 6, 1).setValue("3. Example: generateHRMetrics(new Date('2024-01-01'), new Date('2024-01-31'), {site: 'India'})");
+  filterSheet.getRange(maxLength + 5, 1).setValue("2. Use generateOverallData() function with filters parameter");
+  filterSheet.getRange(maxLength + 6, 1).setValue("3. Example: generateOverallData(new Date('2024-01-01'), new Date('2024-01-31'), {site: 'India'})");
   
-  SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.sites.length} sites, ${uniqueValues.elts.length} ELTs, ${uniqueValues.departments.length} departments.`);
+  SpreadsheetApp.getUi().alert(`Filter options updated. Found ${uniqueValues.sites.length} sites, ${uniqueValues.elts.length} ELTs, ${uniqueValues.departments.length} departments, ${uniqueValues.terminationReasons.length} termination reasons.`);
 }
 
 /**
- * Generates HR metrics for multiple periods and writes to "HR Metrics" sheet
+ * Generates overall HR metrics for multiple periods and writes to "Overall Data" sheet
  * Creates a comprehensive metrics table with all calculated values
  */
-function generateHRMetrics() {
+function generateOverallData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let metricsSheet = ss.getSheetByName("HR Metrics");
+  let metricsSheet = ss.getSheetByName("Overall Data");
   const isNewSheet = !metricsSheet;
   
   if (!metricsSheet) {
-    metricsSheet = ss.insertSheet("HR Metrics");
+    metricsSheet = ss.insertSheet("Overall Data");
   }
   // Don't clear content - preserve user formatting
   // We'll just update the values directly
@@ -766,12 +744,12 @@ function generateHRMetrics() {
     metricsSheet.getRange(lastRow + 2, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
   }
   
-  SpreadsheetApp.getUi().alert(`HR Metrics generated for ${periods.length} periods.`);
+  SpreadsheetApp.getUi().alert(`Overall Data generated for ${periods.length} periods.`);
 }
 
 /**
  * Creates a FilterConfig sheet for easy filter selection
- * Users can enter filter values in this sheet, then run generateHRMetrics()
+ * Users can enter filter values in this sheet, then run generateOverallData()
  */
 function createFilterConfigSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -819,11 +797,398 @@ function createFilterConfigSheet() {
   // Add instructions
   configSheet.getRange(6, 1).setValue("Instructions:");
   configSheet.getRange(7, 1).setValue("1. Select filter values from dropdowns above (leave blank for all)");
-  configSheet.getRange(8, 1).setValue("2. Run 'Generate HR Metrics' from the menu to apply filters");
+  configSheet.getRange(8, 1).setValue("2. Run 'Generate Overall Data' from the menu to apply filters");
   configSheet.getRange(9, 1).setValue("3. Metrics will be calculated based on selected filters");
   
   configSheet.autoResizeColumns(1, 2);
   
-  SpreadsheetApp.getUi().alert("FilterConfig sheet created. Select your filters and run 'Generate HR Metrics'.");
+  SpreadsheetApp.getUi().alert("FilterConfig sheet created. Select your filters and run 'Generate Overall Data'.");
+}
+
+/**
+ * Gets unique values for filtering (Site, ELT, Department, Termination Reasons)
+ * @returns {Object} Object with arrays of unique values
+ */
+function getUniqueFilterValues() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rawDataSheet = ss.getSheetByName("RawData");
+  
+  if (!rawDataSheet) {
+    return { sites: [], elts: [], departments: [], terminationReasons: [] };
+  }
+  
+  const data = rawDataSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return { sites: [], elts: [], departments: [], terminationReasons: [] };
+  }
+  
+  const rows = data.slice(1);
+  const sites = new Set();
+  const elts = new Set();
+  const departments = new Set();
+  const terminationReasons = new Set();
+  
+  rows.forEach(row => {
+    const site = String(row[COLUMN_INDICES.SITE] || "").trim();
+    const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
+    const dept = String(row[COLUMN_INDICES.DEPARTMENT] || "").trim();
+    const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+    
+    if (site) sites.add(site);
+    if (elt) elts.add(elt);
+    if (dept) departments.add(dept);
+    if (termReason) terminationReasons.add(termReason);
+  });
+  
+  return {
+    sites: Array.from(sites).sort(),
+    elts: Array.from(elts).sort(),
+    departments: Array.from(departments).sort(),
+    terminationReasons: Array.from(terminationReasons).sort()
+  };
+}
+
+/**
+ * Generates site-wise headcount metrics month-on-month
+ * Creates a table with Sites as rows and Months/Years as columns
+ */
+function generateHeadcountMetrics() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let headcountSheet = ss.getSheetByName("Headcount Metrics");
+  const isNewSheet = !headcountSheet;
+  
+  if (!headcountSheet) {
+    headcountSheet = ss.insertSheet("Headcount Metrics");
+  }
+  
+  const rawDataSheet = ss.getSheetByName("RawData");
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  // Get unique sites
+  const uniqueValues = getUniqueFilterValues();
+  const sites = uniqueValues.sites;
+  
+  if (sites.length === 0) {
+    SpreadsheetApp.getUi().alert("No sites found in data.");
+    return;
+  }
+  
+  // Generate periods (monthly from Jan 2024 to current month)
+  const periods = [];
+  const startDate = new Date(2024, 0, 1); // Jan 2024
+  const endDate = new Date();
+  
+  let currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    const periodStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const periodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    
+    if (periodStart <= endDate) {
+      periods.push({
+        start: periodStart,
+        end: periodEnd,
+        label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy")
+      });
+    }
+    
+    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+  }
+  
+  // Build table: Sites as rows, Periods as columns
+  const headerRow = ["Site"].concat(periods.map(p => p.label));
+  
+  if (isNewSheet) {
+    headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+    headcountSheet.getRange(1, 1, 1, headerRow.length).setFontWeight("bold");
+  } else {
+    // Update header row
+    headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
+  }
+  
+  // Calculate headcount for each site and period
+  const dataRows = [];
+  sites.forEach(site => {
+    const row = [site];
+    periods.forEach(period => {
+      try {
+        const metrics = calculateHRMetrics(period.start, period.end, { site: site });
+        // Use closing headcount for the period
+        row.push(metrics.closingHC);
+      } catch (error) {
+        Logger.log(`Error calculating headcount for ${site} in ${period.label}: ${error.message}`);
+        row.push(0);
+      }
+    });
+    dataRows.push(row);
+  });
+  
+  // Write data
+  if (dataRows.length > 0) {
+    headcountSheet.getRange(2, 1, dataRows.length, headerRow.length).setValues(dataRows);
+  }
+  
+  // Only auto-resize if new sheet
+  if (isNewSheet) {
+    headcountSheet.autoResizeColumns(1, headerRow.length);
+  }
+  
+  SpreadsheetApp.getUi().alert(`Headcount Metrics generated for ${sites.length} sites across ${periods.length} periods.`);
+}
+
+/**
+ * Generates job level headcount as of today
+ * Creates a table with job levels sorted in specific order
+ */
+function generateJobLevelHeadcount() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let jobLevelSheet = ss.getSheetByName("Job Level Headcount");
+  const isNewSheet = !jobLevelSheet;
+  
+  if (!jobLevelSheet) {
+    jobLevelSheet = ss.insertSheet("Job Level Headcount");
+  }
+  
+  const rawDataSheet = ss.getSheetByName("RawData");
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  const data = rawDataSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    SpreadsheetApp.getUi().alert("No data found in RawData sheet.");
+    return;
+  }
+  
+  const rows = data.slice(1);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Helper function to parse date
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    let date;
+    if (dateStr instanceof Date) {
+      date = dateStr;
+    } else if (typeof dateStr === 'string') {
+      date = new Date(dateStr);
+    }
+    if (date && !isNaN(date.getTime())) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+    return null;
+  };
+  
+  // Count unique employees by job level (as of today)
+  const jobLevelCounts = new Map();
+  
+  rows.forEach(row => {
+    const empName = String(row[COLUMN_INDICES.EMP_NAME] || "").trim();
+    if (!empName) return;
+    
+    const startDate = parseDate(row[COLUMN_INDICES.START_DATE]);
+    const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
+    const jobLevel = String(row[COLUMN_INDICES.JOB_LEVEL] || "").trim();
+    
+    // Check if employee is active as of today
+    if (!startDate || startDate > today) return; // Not started yet
+    if (termDate && termDate <= today) return; // Already terminated
+    
+    // Count unique employees by job level
+    if (!jobLevelCounts.has(jobLevel)) {
+      jobLevelCounts.set(jobLevel, new Set());
+    }
+    jobLevelCounts.get(jobLevel).add(empName);
+  });
+  
+  // Sort job levels according to specified order
+  const sortedJobLevels = Array.from(jobLevelCounts.keys()).sort((a, b) => {
+    const indexA = JOB_LEVEL_ORDER.indexOf(a);
+    const indexB = JOB_LEVEL_ORDER.indexOf(b);
+    
+    // If both in order, sort by order
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    // If only A in order, A comes first
+    if (indexA !== -1) return -1;
+    // If only B in order, B comes first
+    if (indexB !== -1) return 1;
+    // If neither in order, alphabetical
+    return a.localeCompare(b);
+  });
+  
+  // Build table
+  const headers = ["Job Level", "Headcount"];
+  if (isNewSheet) {
+    jobLevelSheet.getRange(1, 1, 1, 2).setValues([headers]);
+    jobLevelSheet.getRange(1, 1, 1, 2).setFontWeight("bold");
+  } else {
+    jobLevelSheet.getRange(1, 1, 1, 2).setValues([headers]);
+  }
+  
+  const dataRows = sortedJobLevels.map(level => [
+    level,
+    jobLevelCounts.get(level).size
+  ]);
+  
+  if (dataRows.length > 0) {
+    jobLevelSheet.getRange(2, 1, dataRows.length, 2).setValues(dataRows);
+  }
+  
+  if (isNewSheet) {
+    jobLevelSheet.autoResizeColumns(1, 2);
+  }
+  
+  SpreadsheetApp.getUi().alert(`Job Level Headcount generated for ${sortedJobLevels.length} job levels as of today.`);
+}
+
+/**
+ * Maps/cleans termination reasons based on user-provided mapping
+ * This function will be updated when user provides the mapping
+ */
+function mapTerminationReasons() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rawDataSheet = ss.getSheetByName("RawData");
+  
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  const data = rawDataSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    SpreadsheetApp.getUi().alert("No data found in RawData sheet.");
+    return;
+  }
+  
+  const header = data[0];
+  const rows = data.slice(1);
+  
+  // TODO: Add termination reason mapping when user provides it
+  // Example structure:
+  // const reasonMapping = {
+  //   "Old Reason 1": "New Reason 1",
+  //   "Old Reason 2": "New Reason 2"
+  // };
+  
+  const reasonMapping = {}; // Will be populated when user provides mapping
+  
+  let updateCount = 0;
+  rows.forEach((row, index) => {
+    const currentReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+    if (currentReason && reasonMapping.hasOwnProperty(currentReason)) {
+      row[COLUMN_INDICES.TERMINATION_REASON] = reasonMapping[currentReason];
+      updateCount++;
+    }
+  });
+  
+  if (updateCount > 0) {
+    const updatedData = [header, ...rows];
+    const targetRange = rawDataSheet.getRange(1, 1, updatedData.length, updatedData[0].length);
+    targetRange.setValues(updatedData);
+    SpreadsheetApp.getUi().alert(`Termination reasons mapped. ${updateCount} rows updated.`);
+  } else {
+    SpreadsheetApp.getUi().alert("No termination reason mappings defined yet. Please add mappings to the function.");
+  }
+}
+
+/**
+ * Generates termination reasons table for pie chart
+ * Filterable by time period (month/year, quarter, year)
+ */
+function generateTerminationReasonsTable() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let termReasonsSheet = ss.getSheetByName("Termination Reasons");
+  const isNewSheet = !termReasonsSheet;
+  
+  if (!termReasonsSheet) {
+    termReasonsSheet = ss.insertSheet("Termination Reasons");
+  }
+  
+  const rawDataSheet = ss.getSheetByName("RawData");
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  const data = rawDataSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    SpreadsheetApp.getUi().alert("No data found in RawData sheet.");
+    return;
+  }
+  
+  const rows = data.slice(1);
+  
+  // Helper function to parse date
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    let date;
+    if (dateStr instanceof Date) {
+      date = dateStr;
+    } else if (typeof dateStr === 'string') {
+      date = new Date(dateStr);
+    }
+    if (date && !isNaN(date.getTime())) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+    return null;
+  };
+  
+  // Count terminations by reason (all time, can be filtered later)
+  const reasonCounts = new Map();
+  
+  rows.forEach(row => {
+    const empName = String(row[COLUMN_INDICES.EMP_NAME] || "").trim();
+    if (!empName) return;
+    
+    const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
+    const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+    
+    if (!termDate || !termReason) return; // Skip if no termination date or reason
+    
+    // Count unique employees by termination reason
+    if (!reasonCounts.has(termReason)) {
+      reasonCounts.set(termReason, new Set());
+    }
+    reasonCounts.get(termReason).add(empName);
+  });
+  
+  // Sort by count (descending)
+  const sortedReasons = Array.from(reasonCounts.entries())
+    .sort((a, b) => b[1].size - a[1].size);
+  
+  // Build table
+  const headers = ["Termination Reason", "Count", "Percentage"];
+  if (isNewSheet) {
+    termReasonsSheet.getRange(1, 1, 1, 3).setValues([headers]);
+    termReasonsSheet.getRange(1, 1, 1, 3).setFontWeight("bold");
+  } else {
+    termReasonsSheet.getRange(1, 1, 1, 3).setValues([headers]);
+  }
+  
+  const totalTerms = Array.from(reasonCounts.values()).reduce((sum, set) => sum + set.size, 0);
+  
+  const dataRows = sortedReasons.map(([reason, empSet]) => {
+    const count = empSet.size;
+    const percentage = totalTerms > 0 ? count / totalTerms : 0;
+    return [reason, count, percentage];
+  });
+  
+  if (dataRows.length > 0) {
+    termReasonsSheet.getRange(2, 1, dataRows.length, 3).setValues(dataRows);
+    
+    // Format percentage column
+    if (isNewSheet) {
+      termReasonsSheet.getRange(2, 3, dataRows.length, 1).setNumberFormat("0.0%");
+    }
+  }
+  
+  if (isNewSheet) {
+    termReasonsSheet.autoResizeColumns(1, 3);
+  }
+  
+  SpreadsheetApp.getUi().alert(`Termination Reasons table generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
 }
 
