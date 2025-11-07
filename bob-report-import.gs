@@ -559,9 +559,9 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
       isRegrettable = termCategory === "Regretted" || termCategory.toLowerCase() === "regretted";
     } else {
       // Fallback to Column T logic if Column U is blank
-      if (termType === "Voluntary - Regrettable") {
-        isRegrettable = true;
-      } else if (termType === "Involuntary" || termType === "Involuntary - Regrettable" || 
+      if (termType === "Voluntary - Regrettable" || termType === "Involuntary - Regrettable") {
+        isRegrettable = true; // Both voluntary and involuntary regrettable are counted
+      } else if (termType === "Involuntary" || 
                  termType === "Voluntary - Non regrettable" || termType === "End of Contract") {
         isRegrettable = false; // Always non-regrettable
       }
