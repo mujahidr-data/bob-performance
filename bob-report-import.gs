@@ -428,7 +428,9 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   });
   const openingHC = openingHCNames.size;
   
-  // Closing Headcount: Original formula = COUNTIFS(C:C, "<=" & periodEnd, O:O, ">" & periodEnd)
+  // Closing Headcount: Employees who are active at the END of the period
+  // Should NOT include employees who terminate on the last day of the period
+  // Original formula = COUNTIFS(C:C, "<=" & periodEnd, O:O, ">" & periodEnd)
   //                     + COUNTIFS(C:C, "<=" & periodEnd, O:O, "")
   // Employees who: Started <= periodEnd AND (Terminated > periodEnd OR never terminated)
   // Count unique employee names
@@ -443,7 +445,8 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     // Must have started on or before period end
     if (!startDate || startDate > periodEndDate) return;
     
-    // Either never terminated (active) OR terminated after period end
+    // Either never terminated (active) OR terminated AFTER period end (not on the last day)
+    // If terminated on the last day, they're not active at the end of the period
     const isActive = !termDate || termDate > periodEndDate;
     if (isActive) {
       closingHCNames.add(empName);
