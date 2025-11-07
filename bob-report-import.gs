@@ -105,23 +105,45 @@ function reassignELTValues() {
   let reassignmentCount = 0;
   const reassignments = [];
   
+  // Debug: Log first few ELT values to verify column index
+  Logger.log(`ELT Column Index: ${COLUMN_INDICES.ELT} (Column ${String.fromCharCode(65 + COLUMN_INDICES.ELT)})`);
+  Logger.log(`Sample ELT values from first 5 rows:`);
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    Logger.log(`Row ${i + 2}: ELT="${rows[i][COLUMN_INDICES.ELT]}" (type: ${typeof rows[i][COLUMN_INDICES.ELT]})`);
+  }
+  
   // Process each row (skip header)
   rows.forEach((row, index) => {
-    const currentELT = String(row[COLUMN_INDICES.ELT] || "").trim();
-    const department = String(row[COLUMN_INDICES.DEPARTMENT] || "").trim();
-    let newELT = null;
+    // Get ELT and Department values, handling various formats
+    let currentELT = row[COLUMN_INDICES.ELT];
+    if (currentELT instanceof Date) {
+      currentELT = Utilities.formatDate(currentELT, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    }
+    currentELT = String(currentELT || "").trim();
     
-    // Rule 1: All "Heather" → "Jyoti"
-    if (currentELT === "Heather") {
+    let department = row[COLUMN_INDICES.DEPARTMENT];
+    if (department instanceof Date) {
+      department = Utilities.formatDate(department, Session.getScriptTimeZone(), "yyyy-MM-dd");
+    }
+    department = String(department || "").trim();
+    
+    let newELT = null;
+    const eltLower = currentELT.toLowerCase();
+    
+    // Rule 1: All "Heather" (or "Heather DeJong") → "Jyoti" (case-insensitive, matches if starts with)
+    if (eltLower.startsWith("heather")) {
       newELT = "Jyoti";
     }
-    // Rule 2: All "Moni" → "Gaurav" if Department is "Engineering" or "Product Success"
-    else if (currentELT === "Moni" && (department === "Engineering" || department === "Product Success")) {
-      newELT = "Gaurav";
-    }
-    // Rule 3: All "Moni" → "Himanshu" if Department is "Product Management" or "Product Design"
-    else if (currentELT === "Moni" && (department === "Product Management" || department === "Product Design")) {
-      newELT = "Himanshu";
+    // Rule 2: All "Moni" (or "Moni Manor") → "Gaurav" if Department is "Engineering" or "Product Success" (case-insensitive)
+    else if (eltLower.startsWith("moni")) {
+      const deptLower = department.toLowerCase();
+      if (deptLower === "engineering" || deptLower === "product success") {
+        newELT = "Gaurav";
+      }
+      // Rule 3: All "Moni" → "Himanshu" if Department is "Product Management" or "Product Design"
+      else if (deptLower === "product management" || deptLower === "product design") {
+        newELT = "Himanshu";
+      }
     }
     
     // Update the row if reassignment is needed
@@ -151,7 +173,24 @@ function reassignELTValues() {
     
     SpreadsheetApp.getUi().alert(`ELT reassignments completed.\n${reassignmentCount} rows updated.`);
   } else {
-    SpreadsheetApp.getUi().alert("No ELT reassignments needed. All values are already correct.");
+    // Debug: Check if Heather or Moni exist at all
+    const allELTs = new Set();
+    rows.forEach(row => {
+      const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
+      if (elt) allELTs.add(elt);
+    });
+    
+    const hasHeather = Array.from(allELTs).some(elt => elt.toLowerCase().includes("heather"));
+    const hasMoni = Array.from(allELTs).some(elt => elt.toLowerCase().includes("moni"));
+    
+    let debugMsg = "No ELT reassignments needed.";
+    if (hasHeather || hasMoni) {
+      debugMsg += `\n\nDebug: Found ${hasHeather ? 'Heather' : ''} ${hasMoni ? 'Moni' : ''} in data but no matches.`;
+      debugMsg += `\nCheck logs for column index and sample values.`;
+      Logger.log(`All unique ELT values: ${Array.from(allELTs).join(", ")}`);
+    }
+    
+    SpreadsheetApp.getUi().alert(debugMsg);
   }
 }
 
