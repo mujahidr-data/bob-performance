@@ -686,6 +686,7 @@ function generateOverallData() {
   
   // Get filter selections from a "FilterConfig" sheet if it exists
   let filters = {};
+  let timePeriodFilter = null;
   const filterConfigSheet = ss.getSheetByName("FilterConfig");
   if (filterConfigSheet) {
     const siteCell = filterConfigSheet.getRange("B2"); // Row 2 for Site
@@ -699,10 +700,24 @@ function generateOverallData() {
     if (site) filters.site = site;
     if (elt) filters.elt = elt;
     if (dept) filters.department = dept;
+    
+    // Get time period filters (for Overall Data, these also apply)
+    const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
+    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    const monthYearFilter = filterConfigSheet.getRange(13, 2).getValue(); // Month-Year filter
+    
+    if (yearFilter) {
+      timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
+    } else if (quarterFilter) {
+      timePeriodFilter = { type: 'quarter', value: parseInt(quarterFilter.replace("Q", ""), 10) };
+    } else if (monthYearFilter) {
+      const selectedMonths = monthYearFilter.split(",").map(m => m.trim());
+      timePeriodFilter = { type: 'month-year', value: selectedMonths };
+    }
   }
   
   // Generate periods (monthly from Jan 2024 to current month)
-  const periods = [];
+  let allPeriods = [];
   const startDate = new Date(2024, 0, 1); // Jan 2024
   const endDate = new Date();
   
@@ -716,14 +731,29 @@ function generateOverallData() {
     
     // Don't include future months
     if (periodStart <= endDate) {
-      periods.push({
+      allPeriods.push({
         start: periodStart,
         end: periodEnd,
-        label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy")
+        label: Utilities.formatDate(periodStart, Session.getScriptTimeZone(), "MMM yyyy"),
+        year: periodStart.getFullYear(),
+        quarter: Math.floor(periodStart.getMonth() / 3) + 1
       });
     }
     
     currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+  }
+  
+  // Apply time period filter if specified
+  let periods = allPeriods;
+  if (timePeriodFilter) {
+    if (timePeriodFilter.type === 'year') {
+      periods = allPeriods.filter(p => p.year === timePeriodFilter.value);
+    } else if (timePeriodFilter.type === 'quarter') {
+      // For quarter, filter by quarter number (works across years)
+      periods = allPeriods.filter(p => p.quarter === timePeriodFilter.value);
+    } else if (timePeriodFilter.type === 'month-year') {
+      periods = allPeriods.filter(p => timePeriodFilter.value.includes(p.label));
+    }
   }
   
   // Write headers (only set formatting if it's a new sheet)
@@ -892,13 +922,63 @@ function generateOverallData() {
   metricsSheet.autoResizeColumns(1, headers.length);
   }
   
-  // Add filter info if filters are applied
-  if (Object.keys(filters).length > 0) {
-    const filterInfo = ["Filters Applied:"];
-    if (filters.site) filterInfo.push(`Site: ${filters.site}`);
-    if (filters.elt) filterInfo.push(`ELT: ${filters.elt}`);
-    if (filters.department) filterInfo.push(`Department: ${filters.department}`);
-    metricsSheet.getRange(lastRow + 2, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
+  // Add filter info in columns O/P, rows 1 & 2 if filters are applied
+  // Column O (15) = Filter labels, Column P (16) = Filter values
+  const filterLabels = [];
+  const filterValues = [];
+  
+  if (filters.site) {
+    filterLabels.push("Site:");
+    filterValues.push(filters.site);
+  }
+  if (filters.elt) {
+    filterLabels.push("ELT:");
+    filterValues.push(filters.elt);
+  }
+  if (filters.department) {
+    filterLabels.push("Department:");
+    filterValues.push(filters.department);
+  }
+  if (timePeriodFilter) {
+    if (timePeriodFilter.type === 'year') {
+      filterLabels.push("Year:");
+      filterValues.push(timePeriodFilter.value);
+    } else if (timePeriodFilter.type === 'quarter') {
+      filterLabels.push("Quarter:");
+      filterValues.push(`Q${timePeriodFilter.value}`);
+    } else if (timePeriodFilter.type === 'month-year') {
+      filterLabels.push("Month-Year:");
+      filterValues.push(timePeriodFilter.value.join(", "));
+    }
+  }
+  
+  // Clear old filter info (clear columns O/P, rows 1-10 to remove any old data)
+  metricsSheet.getRange(1, 15, 10, 2).clearContent();
+  
+  // Write filter info if any filters are applied
+  if (filterLabels.length > 0) {
+    // Row 1: Headers
+    metricsSheet.getRange(1, 15).setValue("Filters Applied:");
+    metricsSheet.getRange(1, 16).setValue("Value");
+    
+    // Row 2 onwards: Filter labels and values
+    const filterRows = [];
+    for (let i = 0; i < filterLabels.length; i++) {
+      filterRows.push([filterLabels[i], filterValues[i]]);
+    }
+    metricsSheet.getRange(2, 15, filterRows.length, 2).setValues(filterRows);
+  }
+  
+  // Clear any old filter info that might be below the data (in column A)
+  const existingLastRow = metricsSheet.getLastRow();
+  if (existingLastRow > values.length + 1) {
+    // Check if there's old filter info below data
+    const checkRow = values.length + 2;
+    const checkValue = metricsSheet.getRange(checkRow, 1).getValue();
+    if (checkValue && String(checkValue).includes("Filters Applied")) {
+      // Clear old filter info rows
+      metricsSheet.getRange(checkRow, 1, 5, 1).clearContent();
+    }
   }
   
   // Add formula descriptions in Column T, Row 1 only if they don't already exist
