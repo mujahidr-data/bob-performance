@@ -786,15 +786,96 @@ function generateOverallData() {
   }
   
   if (values.length > 0) {
-    // Update data values (preserves existing formatting)
+    // Check existing data before writing (to capture formatting source)
+    const existingLastRow = metricsSheet.getLastRow();
+    const existingDataRowCount = existingLastRow > 1 ? existingLastRow - 1 : 0; // Subtract 1 for header row
+    
+    // Update data values (preserves existing formatting for existing rows, new rows get default formatting)
     metricsSheet.getRange(2, 1, values.length, headers.length).setValues(values);
     
     // If there are more existing data rows than new data, clear the extra rows (but preserve formatting)
-    const existingLastRow = metricsSheet.getLastRow();
     if (existingLastRow > values.length + 1) {
       // Clear content only (not formatting) for rows beyond the new data
       const rowsToClear = existingLastRow - (values.length + 1);
       metricsSheet.getRange(values.length + 2, 1, rowsToClear, headers.length).clearContent();
+    }
+    
+    // Always apply formatting from the previous last 2 rows to the new last 2 rows
+    // This ensures consistent formatting as new months are added
+    if (values.length >= 2 && existingDataRowCount >= 2) {
+      // We have at least 2 rows of data, format the last 2 rows
+      // After writing, the new last 2 rows are: values.length and values.length + 1 (1-indexed, +1 for header)
+      const newLastRow = values.length + 1; // Last row (1-indexed: row 2 is first data, so row values.length + 1 is last)
+      const newSecondLastRow = values.length; // Second to last row
+      
+      // The formatting source: what were the last 2 rows BEFORE we wrote new data
+      // If we had 24 rows (rows 2-25) and now have 25 rows (rows 2-26):
+      // - Previous last 2 rows were: 24 and 25 (existingLastRow - 1 and existingLastRow)
+      // - After writing, these rows still have their formatting preserved
+      // - We copy from rows 24-25 to rows 25-26
+      const prevSecondLastRow = existingLastRow - 1; // Was second-to-last before
+      const prevLastRow = existingLastRow; // Was last before
+      
+      try {
+        // Copy formatting from previous second-to-last row to new second-to-last row
+        const prevSecondLastRange = metricsSheet.getRange(prevSecondLastRow, 1, 1, headers.length);
+        prevSecondLastRange.copyFormatToRange(
+          metricsSheet,
+          1, // startColumn
+          headers.length, // endColumn
+          newSecondLastRow, // startRow
+          newSecondLastRow // endRow
+        );
+        
+        // Copy formatting from previous last row to new last row
+        const prevLastRange = metricsSheet.getRange(prevLastRow, 1, 1, headers.length);
+        prevLastRange.copyFormatToRange(
+          metricsSheet,
+          1, // startColumn
+          headers.length, // endColumn
+          newLastRow, // startRow
+          newLastRow // endRow
+        );
+      } catch (e) {
+        Logger.log(`Error copying formatting to last 2 rows: ${e.message}`);
+      }
+    } else if (values.length >= 2 && existingDataRowCount === 1) {
+      // Only had 1 row before, now we have 2+ rows
+      // Copy formatting from the previous single row to both new last 2 rows
+      const prevLastRow = existingLastRow;
+      const newSecondLastRow = values.length;
+      const newLastRow = values.length + 1;
+      
+      try {
+        const prevLastRange = metricsSheet.getRange(prevLastRow, 1, 1, headers.length);
+        // Apply to both new last 2 rows
+        prevLastRange.copyFormatToRange(
+          metricsSheet,
+          1,
+          headers.length,
+          newSecondLastRow,
+          newLastRow
+        );
+      } catch (e) {
+        Logger.log(`Error copying formatting to new last 2 rows: ${e.message}`);
+      }
+    } else if (values.length === 1 && existingDataRowCount >= 1) {
+      // Only 1 row total, copy formatting from previous last row
+      const prevLastRow = existingLastRow;
+      const newLastRow = 2; // Data starts at row 2
+      
+      try {
+        const prevLastRange = metricsSheet.getRange(prevLastRow, 1, 1, headers.length);
+        prevLastRange.copyFormatToRange(
+          metricsSheet,
+          1,
+          headers.length,
+          newLastRow,
+          newLastRow
+        );
+      } catch (e) {
+        Logger.log(`Error copying formatting to new row: ${e.message}`);
+      }
     }
   }
   
