@@ -799,12 +799,40 @@ function generateOverallData() {
   }
   
   // Add filter info if filters are applied
+  let infoRow = lastRow + 2;
   if (Object.keys(filters).length > 0) {
     const filterInfo = ["Filters Applied:"];
     if (filters.site) filterInfo.push(`Site: ${filters.site}`);
     if (filters.elt) filterInfo.push(`ELT: ${filters.elt}`);
     if (filters.department) filterInfo.push(`Department: ${filters.department}`);
-    metricsSheet.getRange(lastRow + 2, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
+    metricsSheet.getRange(infoRow, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
+    infoRow += filterInfo.length + 1;
+  }
+  
+  // Add formula descriptions
+  const descriptions = [
+    ["Formula Descriptions:"],
+    [""],
+    ["Attrition %:", "Voluntary Terms / Average Headcount"],
+    ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"],
+    [""],
+    ["Retention %:", "(Opening Headcount - Total Terms) / Opening Headcount"],
+    [""],
+    ["Turnover %:", "Total Terms / Average Headcount"],
+    ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"],
+    [""],
+    ["Regrettable Turnover %:", "Regrettable Terms / Average Headcount"],
+    ["", "Where Average Headcount = (Opening HC + Closing HC) / 2"]
+  ];
+  
+  metricsSheet.getRange(infoRow, 1, descriptions.length, 2).setValues(descriptions);
+  
+  // Format the description section
+  if (isNewSheet) {
+    const descRange = metricsSheet.getRange(infoRow, 1, 1, 2);
+    descRange.setFontWeight("bold");
+    // Make formula column wider for readability
+    metricsSheet.setColumnWidth(2, 400);
   }
   
   SpreadsheetApp.getUi().alert(`Overall Data generated for ${periods.length} periods.`);
