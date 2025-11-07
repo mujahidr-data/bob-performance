@@ -137,36 +137,74 @@ Core function that calculates all HR metrics for a given time period.
 - **Retention**: `((openingHC - terms) / openingHC) * 100`
 - **Turnover**: `(terms / avgHC) * 100`
 
-#### `generateHRMetrics()`
-Main function to generate HR metrics table. Creates/updates "HR Metrics" sheet with monthly metrics from Jan 2024 to current month.
+#### `generateAllCIQ()`
+Main function to generate overall company HR metrics table. Creates/updates "All CIQ" sheet with monthly metrics from Jan 2024 to current month.
 
 **Features:**
 - Automatically reads filter selections from "FilterConfig" sheet if it exists
 - Generates monthly periods automatically
+- Supports aggregation by Halves (H1/H2) or Quarters (Q1-Q4) when Year + Halves/Quarters is selected
 - Formats percentage columns
 - Displays applied filters at bottom of sheet
+- Clears existing data but preserves formatting when aggregation is used
+
+#### `generateHeadcountBySite()`
+Generates site-wise headcount metrics month-on-month. Creates/updates "Headcount by Site" sheet.
+
+**Features:**
+- Supports aggregation by Halves or Quarters
+- Clears existing data but preserves formatting when aggregation is used
+
+#### `generateHeadcountByELT()`
+Generates ELT-wise headcount metrics month-on-month. Creates/updates "Headcount by ELT" sheet.
+
+**Features:**
+- Supports aggregation by Halves or Quarters
+- Clears existing data but preserves formatting when aggregation is used
+
+#### `generateHeadcountByJobLevel()`
+Generates job level headcount as of today with site-level breakdowns. Creates/updates "Headcount by Job Level" sheet.
+
+**Features:**
+- Includes interactive charts and ELT filter dropdown
+
+#### `generateTerminationsReasonsDrilldown()`
+Generates termination reasons breakdown (Overall, by Site, by ELT). Creates/updates "Terminations Reasons Drilldown" sheet.
+
+**Features:**
+- Supports filtering by Year + Period Type (Halves or Quarters)
+- Fully clears sheet (data + formatting) when filters are applied to prevent formatting issues
 
 #### `getUniqueFilterValues()`
-Extracts unique values for Site, ELT, and Department from RawData sheet.
+Extracts unique values for Site, ELT, Department, and Termination Reasons from RawData sheet.
 
 **Returns:**
 - `sites`: Array of unique site values
 - `elts`: Array of unique ELT values
 - `departments`: Array of unique department values
+- `terminationReasons`: Array of unique termination reason values
 
 #### `updateFilterOptions()`
 Creates/updates "FilterOptions" sheet with all unique filter values for review and vetting.
 
 #### `createFilterConfigSheet()`
 Creates a "FilterConfig" sheet with dropdown menus for selecting filters. Users can:
-1. Select Site, ELT, and/or Department from dropdowns
-2. Leave blank for "all" (no filter)
-3. Run "Generate HR Metrics" to apply selected filters
+1. Select Site, ELT, Department, and/or Time Period from dropdowns
+2. Select Year + Halves/Quarters for aggregated reporting
+3. Leave blank for "all" (no filter)
+4. Run appropriate generate function to apply selected filters
+
+#### `hideProcessingSheets(ss)`
+Automatically hides processing sheets (RawData, FilterOptions, Termination Reason Mapping) after processing is completed.
 
 ### Menu Structure
 The `onOpen()` function creates a "Bob HR Analytics" menu with:
 - **Fetch Bob Report**: Imports data from Bob API
-- **Generate HR Metrics**: Calculates and displays metrics
+- **Generate All CIQ**: Calculates and displays overall company metrics
+- **Generate Headcount by Site**: Generates site-wise headcount metrics
+- **Generate Headcount by ELT**: Generates ELT-wise headcount metrics
+- **Generate Headcount by Job Level**: Generates job level headcount with charts
+- **Generate Terminations Reasons Drilldown**: Generates termination reasons breakdown
 - **Create Filter Config Sheet**: Sets up filter selection interface
 - **Update Filter Options**: Refreshes unique filter values
 
@@ -179,8 +217,12 @@ The `onOpen()` function creates a "Bob HR Analytics" menu with:
 
 2. **Generate Metrics:**
    - Select filters in "FilterConfig" sheet (or leave blank for all)
-   - Run "Generate HR Metrics" from menu
-   - View results in "HR Metrics" sheet
+   - Run appropriate generate function from menu:
+     - "Generate All CIQ" for overall company metrics
+     - "Generate Headcount by Site" for site breakdowns
+     - "Generate Headcount by ELT" for ELT breakdowns
+     - "Generate Terminations Reasons Drilldown" for termination analysis
+   - View results in respective sheets
 
 3. **Filtering:**
    - Filter values are extracted automatically from RawData
@@ -189,10 +231,15 @@ The `onOpen()` function creates a "Bob HR Analytics" menu with:
    - Multiple filters can be combined (AND logic)
 
 ### Sheets Created
-- **RawData**: Contains imported Bob data (existing)
-- **HR Metrics**: Contains calculated metrics table (auto-generated)
-- **FilterOptions**: Contains unique filter values for review (optional)
+- **RawData**: Contains imported Bob data (hidden after processing)
+- **All CIQ**: Overall company HR metrics table (auto-generated)
+- **Headcount by Site**: Site-wise headcount metrics (auto-generated)
+- **Headcount by ELT**: ELT-wise headcount metrics (auto-generated)
+- **Headcount by Job Level**: Job level headcount with charts (auto-generated)
+- **Terminations Reasons Drilldown**: Termination reasons breakdown (auto-generated)
+- **FilterOptions**: Contains unique filter values for review (optional, hidden after processing)
 - **FilterConfig**: Contains filter selection dropdowns (optional)
+- **Termination Reason Mapping**: Mapping sheet for cleaning termination reasons (optional, hidden after processing)
 
 ### Notes
 - All date comparisons use inclusive start dates and exclusive end dates for closing headcount
