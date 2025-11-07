@@ -951,7 +951,8 @@ function getUniqueFilterValues() {
 
 /**
  * Generates site-wise headcount metrics month-on-month
- * Creates a table with Sites as rows and Months/Years as columns
+ * Creates a table with Sites and Metrics as rows and Months/Years as columns
+ * Metrics include: Average HC, Hires, Terminations, Regrettable Terms, Non-Regrettable Terms, Attrition %, Regrettable %
  */
 function generateHeadcountMetrics() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1001,8 +1002,8 @@ function generateHeadcountMetrics() {
     currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
   }
   
-  // Build table: Sites as rows, Periods as columns
-  const headerRow = ["Site"].concat(periods.map(p => p.label));
+  // Build table: Site/Metric as rows, Periods as columns
+  const headerRow = ["Site / Metric"].concat(periods.map(p => p.label));
   
   if (isNewSheet) {
     headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
@@ -1012,26 +1013,84 @@ function generateHeadcountMetrics() {
     headcountSheet.getRange(1, 1, 1, headerRow.length).setValues([headerRow]);
   }
   
-  // Calculate headcount for each site and period
+  // Define metrics to calculate for each site
+  const metricLabels = [
+    "Average Headcount",
+    "Hires",
+    "Terminations",
+    "Regrettable Terms",
+    "Non-Regrettable Terms",
+    "Attrition %",
+    "Regrettable %"
+  ];
+  
+  // Calculate metrics for each site and period
   const dataRows = [];
   sites.forEach(site => {
-    const row = [site];
-    periods.forEach(period => {
-      try {
-        const metrics = calculateHRMetrics(period.start, period.end, { site: site });
-        // Use closing headcount for the period
-        row.push(metrics.closingHC);
-      } catch (error) {
-        Logger.log(`Error calculating headcount for ${site} in ${period.label}: ${error.message}`);
-        row.push(0);
-      }
+    // For each site, create rows for each metric
+    metricLabels.forEach((metricLabel, metricIndex) => {
+      const row = [`${site} - ${metricLabel}`];
+      
+      periods.forEach(period => {
+        try {
+          const metrics = calculateHRMetrics(period.start, period.end, { site: site });
+          
+          let value = 0;
+          switch(metricIndex) {
+            case 0: // Average Headcount
+              value = (metrics.openingHC + metrics.closingHC) / 2;
+              break;
+            case 1: // Hires
+              value = metrics.hires;
+              break;
+            case 2: // Terminations
+              value = metrics.terms;
+              break;
+            case 3: // Regrettable Terms
+              value = metrics.regrettableTerms;
+              break;
+            case 4: // Non-Regrettable Terms
+              value = metrics.terms - metrics.regrettableTerms;
+              break;
+            case 5: // Attrition %
+              value = metrics.attrition;
+              break;
+            case 6: // Regrettable %
+              const avgHC = (metrics.openingHC + metrics.closingHC) / 2;
+              value = avgHC > 0 ? (metrics.regrettableTerms / avgHC) : 0;
+              break;
+          }
+          row.push(value);
+        } catch (error) {
+          Logger.log(`Error calculating ${metricLabel} for ${site} in ${period.label}: ${error.message}`);
+          row.push(0);
+        }
+      });
+      dataRows.push(row);
     });
-    dataRows.push(row);
   });
   
   // Write data
   if (dataRows.length > 0) {
     headcountSheet.getRange(2, 1, dataRows.length, headerRow.length).setValues(dataRows);
+    
+    // Format percentage columns (Attrition % and Regrettable %)
+    if (isNewSheet) {
+      // Find percentage rows (every 7th row starting from row 6 for each site)
+      const percentageRowIndices = [];
+      sites.forEach((site, siteIndex) => {
+        const baseRow = siteIndex * metricLabels.length + 2; // +2 because data starts at row 2
+        percentageRowIndices.push(baseRow + 5); // Attrition % row
+        percentageRowIndices.push(baseRow + 6); // Regrettable % row
+      });
+      
+      percentageRowIndices.forEach(rowIndex => {
+        if (rowIndex <= dataRows.length + 1) {
+          // Format all period columns (columns 2 onwards) as percentage
+          headcountSheet.getRange(rowIndex, 2, 1, periods.length).setNumberFormat("0.0%");
+        }
+      });
+    }
   }
   
   // Only auto-resize if new sheet
@@ -1039,7 +1098,7 @@ function generateHeadcountMetrics() {
     headcountSheet.autoResizeColumns(1, headerRow.length);
   }
   
-  SpreadsheetApp.getUi().alert(`Headcount Metrics generated for ${sites.length} sites across ${periods.length} periods.`);
+  SpreadsheetApp.getUi().alert(`Headcount Metrics generated for ${sites.length} sites with ${metricLabels.length} metrics each, across ${periods.length} periods.`);
 }
 
 /**
