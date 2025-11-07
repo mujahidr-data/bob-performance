@@ -150,27 +150,25 @@ function updateELTChart(jobLevelSheet, eltFilterRow) {
     const dataRange = jobLevelSheet.getDataRange();
     const values = dataRange.getValues();
     
-    // Find the row with "Filtered Data for Chart:" or find the filtered headers row
-    let filteredHeadersRow = null;
-    for (let i = 0; i < values.length; i++) {
-      if (values[i][0] && String(values[i][0]).includes("Filtered Data for Chart:")) {
-        filteredHeadersRow = i + 2; // +2 because header is on next row
-        break;
-      }
-    }
-    
-    if (!filteredHeadersRow) {
-      Logger.log("Filtered data range not found, skipping update");
-      return;
-    }
-    
-    // Count how many job levels we have (find the ELT breakdown table first)
+    // Find the filtered headers row - look for "Job Level" in column A that's below the ELT breakdown table
+    // First, find the ELT breakdown table to know where to look below it
     let eltBreakdownStartRow = null;
+    let eltBreakdownEndRow = null;
     for (let i = 0; i < values.length; i++) {
       const row = values[i];
-      // Look for a row that has "Job Level" as first cell and ELT names in subsequent cells
-      if (row[0] === "Job Level" && row.length > 2) {
-        eltBreakdownStartRow = i + 1;
+      // Look for a row that has "Job Level" as first cell and ELT names in subsequent cells (this is the ELT breakdown header)
+      if (row[0] === "Job Level" && row.length > 2 && !eltBreakdownStartRow) {
+        eltBreakdownStartRow = i + 1; // Convert to 1-indexed
+        // Count how many data rows follow
+        let dataRowCount = 0;
+        for (let j = i + 1; j < values.length; j++) {
+          if (values[j][0] && String(values[j][0]).trim() && !String(values[j][0]).includes(":")) {
+            dataRowCount++;
+          } else {
+            break;
+          }
+        }
+        eltBreakdownEndRow = i + 1 + dataRowCount; // End row of ELT breakdown table
         break;
       }
     }
@@ -180,16 +178,33 @@ function updateELTChart(jobLevelSheet, eltFilterRow) {
       return;
     }
     
-    // Count job level rows (until we hit an empty row or end of data)
+    // Now find the filtered data table header row (should be below the ELT breakdown table)
+    // Look for "Job Level" in column A that appears after the ELT breakdown table
+    let filteredHeadersRow = null;
+    for (let i = eltBreakdownEndRow; i < values.length; i++) {
+      if (values[i][0] === "Job Level") {
+        filteredHeadersRow = i + 1; // Convert to 1-indexed
+        break;
+      }
+    }
+    
+    if (!filteredHeadersRow) {
+      Logger.log("Filtered data table header not found, skipping update");
+      return;
+    }
+    
+    // Count job level rows in the filtered data table (until we hit an empty row or end of data)
     let jobLevelCount = 0;
-    for (let i = eltBreakdownStartRow; i < values.length; i++) {
-      if (values[i][0] && String(values[i][0]).trim()) {
+    for (let i = filteredHeadersRow; i < values.length; i++) {
+      if (values[i][0] && String(values[i][0]).trim() && values[i][0] !== "Job Level") {
         jobLevelCount++;
+      } else if (values[i][0] === "Job Level") {
+        // Skip the header row
+        continue;
       } else {
         break;
       }
     }
-    jobLevelCount--; // Subtract 1 for header row
     
     // Determine how many columns to include based on filter
     // If "All", include all ELT columns. Otherwise, count non-empty columns in filtered data
@@ -206,7 +221,8 @@ function updateELTChart(jobLevelSheet, eltFilterRow) {
       numCols = headerRow.length - 1; // Exclude "Total" column
     }
     
-    // Create the filtered chart range
+    // Create the filtered chart range (header row + all data rows)
+    // filteredHeadersRow is the header row, data rows start at filteredHeadersRow + 1
     const filteredChartRange = jobLevelSheet.getRange(filteredHeadersRow, 1, jobLevelCount + 1, numCols);
     
     // Update the chart
@@ -1894,11 +1910,13 @@ function generateJobLevelHeadcount() {
   };
   
   // For each job level row, create a formula that shows Job Level + selected ELT column
+  // Data rows start one row BELOW the header row
   sortedJobLevels.forEach((level, levelIndex) => {
-    const dataRow = eltBreakdownStartRow + 1 + levelIndex; // +1 for header row in original table
+    const dataRow = eltBreakdownStartRow + 1 + levelIndex; // +1 for header row in original ELT breakdown table
+    const filteredDataRow = filteredHeadersRow + 1 + levelIndex; // +1 to start BELOW the header row
     
     // Job Level column (always show) - Column A
-    jobLevelSheet.getRange(filteredHeadersRow + levelIndex, 1).setFormula(`=A${dataRow}`);
+    jobLevelSheet.getRange(filteredDataRow, 1).setFormula(`=A${dataRow}`);
     
     // ELT column(s) - if "All", show all ELT columns, otherwise show only selected ELT
     if (sortedELTs.length > 0) {
@@ -1910,12 +1928,15 @@ function generateJobLevelHeadcount() {
         // Escape quotes in ELT name for formula
         const escapedElt = elt.replace(/"/g, '""');
         const formula = `=IF(${filterCellRef}="All", ${eltColLetter}${dataRow}, IF(${filterCellRef}="${escapedElt}", ${eltColLetter}${dataRow}, ""))`;
-        jobLevelSheet.getRange(filteredHeadersRow + levelIndex, eltIndex + 2).setFormula(formula);
+        jobLevelSheet.getRange(filteredDataRow, eltIndex + 2).setFormula(formula);
       });
     }
   });
   
   // Set header row for filtered data
+  // Column A should always be "Job Level"
+  jobLevelSheet.getRange(filteredHeadersRow, 1).setValue("Job Level");
+  
   if (sortedELTs.length > 0) {
     // Header formula: If "All", show all ELT headers, otherwise show only selected ELT header
     sortedELTs.forEach((elt, eltIndex) => {
@@ -2060,18 +2081,19 @@ function generateJobLevelHeadcount() {
     // Chart 3: ELT Breakdown (Stacked Column Chart) - Interactive with dropdown filter
     // The chart references the filtered data table which updates automatically based on dropdown
     if (eltChart) {
-      // Update existing chart to use filtered data range
+      // Update existing chart to use filtered data range - DO NOT recreate
       try {
         const updatedChart = eltChart.modify()
           .clearRanges()
           .addRange(filteredChartRange)
           .build();
         jobLevelSheet.updateChart(updatedChart);
+        Logger.log("ELT chart updated (not recreated)");
       } catch (e) {
         Logger.log(`Error updating ELT chart: ${e.message}`);
       }
     } else {
-      // Create new chart pointing to filtered data range
+      // Only create new chart if it doesn't exist
       const newELTChart = jobLevelSheet.newChart()
         .setChartType(Charts.ChartType.COLUMN)
         .addRange(filteredChartRange)
@@ -2085,6 +2107,7 @@ function generateJobLevelHeadcount() {
         .setOption('height', 400)
         .build();
       jobLevelSheet.insertChart(newELTChart);
+      Logger.log("ELT chart created (new)");
     }
     
     // Add instruction text
