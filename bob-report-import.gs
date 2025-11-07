@@ -1732,8 +1732,8 @@ function generateHeadcountBySite() {
     }
   });
   
-  // If aggregation is used (Quarter/Halves), clear existing data but preserve formatting
-  if (aggregationType && !isNewSheet) {
+  // Clear existing data but preserve formatting (for both new and existing sheets)
+  if (!isNewSheet) {
     // Clear all data but preserve formatting
     const existingLastRow = headcountSheet.getLastRow();
     if (existingLastRow > 0) {
@@ -2052,8 +2052,8 @@ function generateHeadcountByELT() {
     }
   });
   
-  // If aggregation is used (Quarter/Halves), clear existing data but preserve formatting
-  if (aggregationType && !isNewSheet) {
+  // Clear existing data but preserve formatting (for both new and existing sheets)
+  if (!isNewSheet) {
     // Clear all data but preserve formatting
     const existingLastRow = eltSheet.getLastRow();
     if (existingLastRow > 0) {
