@@ -333,52 +333,78 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     filteredRows = filteredRows.filter(row => row[COLUMN_INDICES.DEPARTMENT] === filters.department);
   }
   
-  // Helper function to parse date
+  // Helper function to parse date and normalize to date only (no time)
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
-    if (dateStr instanceof Date) return dateStr;
-    return new Date(dateStr);
+    let date;
+    if (dateStr instanceof Date) {
+      date = dateStr;
+    } else {
+      date = new Date(dateStr);
+    }
+    // Normalize to date only (set time to midnight)
+    if (date && !isNaN(date.getTime())) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+    return null;
   };
   
-  // Opening Headcount: Employees who started <= periodStart and (terminated >= periodStart OR not terminated)
+  // Normalize period dates to date only
+  const periodStartDate = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate());
+  const periodEndDate = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate());
+  
+  // Opening Headcount: Original formula = COUNTIFS(C:C, "<=" & periodStart, O:O, ">=" & periodStart) 
+  //                    + COUNTIFS(C:C, "<=" & periodStart, O:O, "")
+  // Employees who: Started <= periodStart AND (Terminated >= periodStart OR never terminated)
   const openingHC = filteredRows.filter(row => {
     const startDate = parseDate(row[COLUMN_INDICES.START_DATE]);
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     
-    if (!startDate || startDate > periodStart) return false;
+    // Must have started on or before period start
+    if (!startDate || startDate > periodStartDate) return false;
+    
+    // Either never terminated (active) OR terminated on/after period start
     if (!termDate) return true; // Active employee
-    return termDate >= periodStart;
+    return termDate >= periodStartDate;
   }).length;
   
-  // Closing Headcount: Employees who started <= periodEnd and (terminated > periodEnd OR not terminated)
+  // Closing Headcount: Original formula = COUNTIFS(C:C, "<=" & periodEnd, O:O, ">" & periodEnd)
+  //                     + COUNTIFS(C:C, "<=" & periodEnd, O:O, "")
+  // Employees who: Started <= periodEnd AND (Terminated > periodEnd OR never terminated)
   const closingHC = filteredRows.filter(row => {
     const startDate = parseDate(row[COLUMN_INDICES.START_DATE]);
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     
-    if (!startDate || startDate > periodEnd) return false;
+    // Must have started on or before period end
+    if (!startDate || startDate > periodEndDate) return false;
+    
+    // Either never terminated (active) OR terminated after period end
     if (!termDate) return true; // Active employee
-    return termDate > periodEnd;
+    return termDate > periodEndDate;
   }).length;
   
-  // Hires: Employees who started between periodStart and periodEnd
+  // Hires: Original formula = COUNTIFS(C:C, ">=" & periodStart, C:C, "<=" & periodEnd)
+  // Employees who started between periodStart and periodEnd (inclusive)
   const hires = filteredRows.filter(row => {
     const startDate = parseDate(row[COLUMN_INDICES.START_DATE]);
     if (!startDate) return false;
-    return startDate >= periodStart && startDate <= periodEnd;
+    return startDate >= periodStartDate && startDate <= periodEndDate;
   }).length;
   
-  // Terms: Employees who terminated between periodStart and periodEnd
+  // Terms: Original formula = COUNTIFS(O:O, ">=" & periodStart, O:O, "<=" & periodEnd)
+  // Employees who terminated between periodStart and periodEnd (inclusive)
   const terms = filteredRows.filter(row => {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     if (!termDate) return false;
-    return termDate >= periodStart && termDate <= periodEnd;
+    return termDate >= periodStartDate && termDate <= periodEndDate;
   }).length;
   
-  // Voluntary Terms
+  // Voluntary Terms: Original formula = COUNTIFS with multiple conditions
+  // Employees who terminated in period AND have voluntary termination type
   const voluntaryTerms = filteredRows.filter(row => {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     if (!termDate) return false;
-    if (termDate < periodStart || termDate > periodEnd) return false;
+    if (termDate < periodStartDate || termDate > periodEndDate) return false;
     
     const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
     return termType === "Voluntary" || 
@@ -386,11 +412,12 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
            termType === "Voluntary - Non regrettable";
   }).length;
   
-  // Involuntary Terms
+  // Involuntary Terms: Original formula = COUNTIFS with multiple conditions
+  // Employees who terminated in period AND have involuntary termination type
   const involuntaryTerms = filteredRows.filter(row => {
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     if (!termDate) return false;
-    if (termDate < periodStart || termDate > periodEnd) return false;
+    if (termDate < periodStartDate || termDate > periodEndDate) return false;
     
     const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
     return termType === "Involuntary" || 
