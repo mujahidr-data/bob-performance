@@ -2501,9 +2501,26 @@ function generateTerminationReasonsTable() {
   const SITE_COL_START = 5;    // Column E
   const ELT_COL_START = 9;     // Column I
   
-  let overallRow = 1;
-  let siteRow = 1;
-  let eltRow = 1;
+  // Clear rows 1-2 in column A first (to remove any old filter info)
+  termReasonsSheet.getRange(1, OVERALL_COL_START, 2, 1).clearContent();
+  
+  // Add filter info in rows 1 and 2 of column A (before all tables)
+  if (timePeriodFilter) {
+    const filterInfo = ["Filters Applied:"];
+    if (timePeriodFilter.type === 'year') {
+      filterInfo.push(`Year: ${timePeriodFilter.value}`);
+    } else if (timePeriodFilter.type === 'halves') {
+      filterInfo.push(`Halves: H${timePeriodFilter.value}`);
+    } else if (timePeriodFilter.type === 'quarter') {
+      filterInfo.push(`Quarter: Q${timePeriodFilter.value}`);
+    }
+    termReasonsSheet.getRange(1, OVERALL_COL_START, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
+  }
+  
+  // All tables start at row 3
+  let overallRow = 3;
+  let siteRow = 3;
+  let eltRow = 3;
   
   // Build Overall table in columns A, B, C
   termReasonsSheet.getRange(overallRow, OVERALL_COL_START).setValue("Termination Reasons (Overall)");
@@ -2653,19 +2670,7 @@ function generateTerminationReasonsTable() {
     });
   }
   
-  // Add filter info if time period filter is applied (in column A, below overall table)
-  if (timePeriodFilter) {
-    const filterRow = overallRow + 2;
-    const filterInfo = ["Filters Applied:"];
-    if (timePeriodFilter.type === 'year') {
-      filterInfo.push(`Year: ${timePeriodFilter.value}`);
-    } else if (timePeriodFilter.type === 'halves') {
-      filterInfo.push(`Halves: H${timePeriodFilter.value}`);
-    } else if (timePeriodFilter.type === 'quarter') {
-      filterInfo.push(`Quarter: Q${timePeriodFilter.value}`);
-    }
-    termReasonsSheet.getRange(filterRow, OVERALL_COL_START, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
-  }
+  // Filter info is already placed in rows 1-2 above, so no need to add it here
   
   if (isNewSheet) {
     // Auto-resize all columns used (A-C, E-G, I-K)
