@@ -1195,7 +1195,7 @@ function generateHeadcountMetrics() {
     "Terminations",
     "Regrettable Terms",
     "Non-Regrettable Terms",
-    "Attrition %",
+    "Turnover %",
     "Regrettable %"
   ];
   
@@ -1259,11 +1259,12 @@ function generateHeadcountMetrics() {
           case 4: // Non-Regrettable Terms
             value = metrics.terms - metrics.regrettableTerms;
             break;
-          case 5: // Attrition %
-            value = metrics.attrition;
+          case 5: // Turnover %
+            // Use the pre-calculated turnover from calculateHRMetrics (Total Terms / Avg HC)
+            value = metrics.turnover;
             break;
           case 6: // Regrettable %
-            // Use the pre-calculated regrettableTurnover from calculateHRMetrics
+            // Use the pre-calculated regrettableTurnover from calculateHRMetrics (Regrettable Terms / Avg HC)
             value = metrics.regrettableTurnover;
             break;
         }
