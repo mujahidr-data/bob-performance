@@ -2493,28 +2493,68 @@ function generateTerminationReasonsTable() {
   const sortedSites = uniqueValues.sites.sort();
   const sortedELTs = uniqueValues.elts.sort();
   
-  let currentRow = 1;
+  // Column assignments:
+  // Overall: Columns A, B, C (columns 1, 2, 3)
+  // By Site: Columns E, F, G (columns 5, 6, 7)
+  // By ELT: Columns I, J, K (columns 9, 10, 11)
+  const OVERALL_COL_START = 1; // Column A
+  const SITE_COL_START = 5;    // Column E
+  const ELT_COL_START = 9;     // Column I
   
-  // Build Site breakdown tables
+  let overallRow = 1;
+  let siteRow = 1;
+  let eltRow = 1;
+  
+  // Build Overall table in columns A, B, C
+  termReasonsSheet.getRange(overallRow, OVERALL_COL_START).setValue("Termination Reasons (Overall)");
+  termReasonsSheet.getRange(overallRow, OVERALL_COL_START).setFontWeight("bold");
+  termReasonsSheet.getRange(overallRow, OVERALL_COL_START).setFontSize(12);
+  overallRow++;
+  
+  // Sort by count (descending)
+  const sortedReasons = Array.from(overallReasonCounts.entries())
+    .sort((a, b) => b[1].size - a[1].size);
+  
+  // Headers
+  termReasonsSheet.getRange(overallRow, OVERALL_COL_START, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
+  termReasonsSheet.getRange(overallRow, OVERALL_COL_START, 1, 3).setFontWeight("bold");
+  overallRow++;
+  
+  const totalTerms = Array.from(overallReasonCounts.values())
+    .reduce((sum, set) => sum + set.size, 0);
+  
+  const dataRows = sortedReasons.map(([reason, empSet]) => {
+    const count = empSet.size;
+    const percentage = totalTerms > 0 ? count / totalTerms : 0;
+    return [reason, count, percentage];
+  });
+  
+  if (dataRows.length > 0) {
+    termReasonsSheet.getRange(overallRow, OVERALL_COL_START, dataRows.length, 3).setValues(dataRows);
+    termReasonsSheet.getRange(overallRow, OVERALL_COL_START + 2, dataRows.length, 1).setNumberFormat("0.0%");
+    overallRow += dataRows.length;
+  }
+  
+  // Build Site breakdown tables in columns E, F, G
   if (sortedSites.length > 0) {
-    termReasonsSheet.getRange(currentRow, 1).setValue("Termination Reasons by Site");
-    termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
-    termReasonsSheet.getRange(currentRow, 1).setFontSize(12);
-    currentRow++;
+    termReasonsSheet.getRange(siteRow, SITE_COL_START).setValue("Termination Reasons by Site");
+    termReasonsSheet.getRange(siteRow, SITE_COL_START).setFontWeight("bold");
+    termReasonsSheet.getRange(siteRow, SITE_COL_START).setFontSize(12);
+    siteRow++;
     
     sortedSites.forEach((site, siteIndex) => {
       const siteMap = siteReasonCounts.get(site);
       
       if (siteMap && siteMap.size > 0) {
         // Site header
-        termReasonsSheet.getRange(currentRow, 1).setValue(`${site}:`);
-        termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
-        currentRow++;
+        termReasonsSheet.getRange(siteRow, SITE_COL_START).setValue(`${site}:`);
+        termReasonsSheet.getRange(siteRow, SITE_COL_START).setFontWeight("bold");
+        siteRow++;
         
         // Headers
-        termReasonsSheet.getRange(currentRow, 1, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
-        termReasonsSheet.getRange(currentRow, 1, 1, 3).setFontWeight("bold");
-        currentRow++;
+        termReasonsSheet.getRange(siteRow, SITE_COL_START, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
+        termReasonsSheet.getRange(siteRow, SITE_COL_START, 1, 3).setFontWeight("bold");
+        siteRow++;
         
         // Sort reasons by count
         const siteReasons = Array.from(siteMap.entries())
@@ -2529,42 +2569,39 @@ function generateTerminationReasonsTable() {
         });
         
         if (siteDataRows.length > 0) {
-          termReasonsSheet.getRange(currentRow, 1, siteDataRows.length, 3).setValues(siteDataRows);
-          termReasonsSheet.getRange(currentRow, 3, siteDataRows.length, 1).setNumberFormat("0.0%");
-          currentRow += siteDataRows.length;
+          termReasonsSheet.getRange(siteRow, SITE_COL_START, siteDataRows.length, 3).setValues(siteDataRows);
+          termReasonsSheet.getRange(siteRow, SITE_COL_START + 2, siteDataRows.length, 1).setNumberFormat("0.0%");
+          siteRow += siteDataRows.length;
         }
         
         // Add blank row between sites
         if (siteIndex < sortedSites.length - 1) {
-          currentRow++;
+          siteRow++;
         }
       }
     });
-    
-    // Add blank row before ELT section
-    currentRow += 2;
   }
   
-  // Build ELT breakdown tables
+  // Build ELT breakdown tables in columns I, J, K
   if (sortedELTs.length > 0) {
-    termReasonsSheet.getRange(currentRow, 1).setValue("Termination Reasons by ELT");
-    termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
-    termReasonsSheet.getRange(currentRow, 1).setFontSize(12);
-    currentRow++;
+    termReasonsSheet.getRange(eltRow, ELT_COL_START).setValue("Termination Reasons by ELT");
+    termReasonsSheet.getRange(eltRow, ELT_COL_START).setFontWeight("bold");
+    termReasonsSheet.getRange(eltRow, ELT_COL_START).setFontSize(12);
+    eltRow++;
     
     sortedELTs.forEach((elt, eltIndex) => {
       const eltMap = eltReasonCounts.get(elt);
       
       if (eltMap && eltMap.size > 0) {
         // ELT header
-        termReasonsSheet.getRange(currentRow, 1).setValue(`${elt}:`);
-        termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
-        currentRow++;
+        termReasonsSheet.getRange(eltRow, ELT_COL_START).setValue(`${elt}:`);
+        termReasonsSheet.getRange(eltRow, ELT_COL_START).setFontWeight("bold");
+        eltRow++;
         
         // Headers
-        termReasonsSheet.getRange(currentRow, 1, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
-        termReasonsSheet.getRange(currentRow, 1, 1, 3).setFontWeight("bold");
-        currentRow++;
+        termReasonsSheet.getRange(eltRow, ELT_COL_START, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
+        termReasonsSheet.getRange(eltRow, ELT_COL_START, 1, 3).setFontWeight("bold");
+        eltRow++;
         
         // Sort reasons by count
         const eltReasons = Array.from(eltMap.entries())
@@ -2579,55 +2616,22 @@ function generateTerminationReasonsTable() {
         });
         
         if (eltDataRows.length > 0) {
-          termReasonsSheet.getRange(currentRow, 1, eltDataRows.length, 3).setValues(eltDataRows);
-          termReasonsSheet.getRange(currentRow, 3, eltDataRows.length, 1).setNumberFormat("0.0%");
-          currentRow += eltDataRows.length;
+          termReasonsSheet.getRange(eltRow, ELT_COL_START, eltDataRows.length, 3).setValues(eltDataRows);
+          termReasonsSheet.getRange(eltRow, ELT_COL_START + 2, eltDataRows.length, 1).setNumberFormat("0.0%");
+          eltRow += eltDataRows.length;
         }
         
         // Add blank row between ELTs
         if (eltIndex < sortedELTs.length - 1) {
-          currentRow++;
+          eltRow++;
         }
       }
     });
-    
-    // Add blank row before overall section
-    currentRow += 2;
   }
   
-  // Build overall table
-  termReasonsSheet.getRange(currentRow, 1).setValue("Termination Reasons (Overall)");
-  termReasonsSheet.getRange(currentRow, 1).setFontWeight("bold");
-  termReasonsSheet.getRange(currentRow, 1).setFontSize(12);
-  currentRow++;
-  
-  // Sort by count (descending)
-  const sortedReasons = Array.from(overallReasonCounts.entries())
-    .sort((a, b) => b[1].size - a[1].size);
-  
-  // Headers
-  termReasonsSheet.getRange(currentRow, 1, 1, 3).setValues([["Termination Reason", "Count", "Percentage"]]);
-  termReasonsSheet.getRange(currentRow, 1, 1, 3).setFontWeight("bold");
-  currentRow++;
-  
-  const totalTerms = Array.from(overallReasonCounts.values())
-    .reduce((sum, set) => sum + set.size, 0);
-  
-  const dataRows = sortedReasons.map(([reason, empSet]) => {
-    const count = empSet.size;
-    const percentage = totalTerms > 0 ? count / totalTerms : 0;
-    return [reason, count, percentage];
-  });
-  
-  if (dataRows.length > 0) {
-    termReasonsSheet.getRange(currentRow, 1, dataRows.length, 3).setValues(dataRows);
-    termReasonsSheet.getRange(currentRow, 3, dataRows.length, 1).setNumberFormat("0.0%");
-    currentRow += dataRows.length;
-  }
-  
-  // Add filter info if time period filter is applied
+  // Add filter info if time period filter is applied (in column A, below overall table)
   if (timePeriodFilter) {
-    currentRow += 2;
+    const filterRow = overallRow + 2;
     const filterInfo = ["Filters Applied:"];
     if (timePeriodFilter.type === 'year') {
       filterInfo.push(`Year: ${timePeriodFilter.value}`);
@@ -2636,11 +2640,17 @@ function generateTerminationReasonsTable() {
     } else if (timePeriodFilter.type === 'quarter') {
       filterInfo.push(`Quarter: Q${timePeriodFilter.value}`);
     }
-    termReasonsSheet.getRange(currentRow, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
+    termReasonsSheet.getRange(filterRow, OVERALL_COL_START, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
   }
   
   if (isNewSheet) {
-    termReasonsSheet.autoResizeColumns(1, 3);
+    // Auto-resize all columns used (A-C, E-G, I-K)
+    termReasonsSheet.autoResizeColumns(OVERALL_COL_START, 3); // Columns A-C
+    termReasonsSheet.autoResizeColumns(SITE_COL_START, 3);    // Columns E-G
+    termReasonsSheet.autoResizeColumns(ELT_COL_START, 3);     // Columns I-K
+  } else {
+    // On existing sheets, preserve user formatting but ensure columns are visible
+    // Only auto-resize if columns are too narrow (optional - can be removed if you want to preserve all formatting)
   }
   
   SpreadsheetApp.getUi().alert(`Termination Reasons table generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
