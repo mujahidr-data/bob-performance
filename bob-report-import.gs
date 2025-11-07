@@ -3101,7 +3101,7 @@ function generateTerminationsReasonsDrilldown() {
   termReasonsSheet.autoResizeColumns(ELT_COL_START, 3);     // Columns I-K
   
   // Turn off gridlines for the sheet (apply to both new and existing sheets)
-  termReasonsSheet.hideGridlines();
+  termReasonsSheet.setHiddenGridlines(true);
   
   SpreadsheetApp.getUi().alert(`Terminations Reasons Drilldown generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
   
