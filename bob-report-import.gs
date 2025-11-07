@@ -1307,8 +1307,8 @@ function generateHeadcountMetrics() {
 }
 
 /**
- * Generates job level headcount as of today
- * Creates a table with job levels sorted in specific order
+ * Generates job level headcount as of today with site-level breakdowns
+ * Creates tables with job levels sorted in specific order, plus charts
  */
 function generateJobLevelHeadcount() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1350,8 +1350,10 @@ function generateJobLevelHeadcount() {
     return null;
   };
   
-  // Count unique employees by job level (as of today)
-  const jobLevelCounts = new Map();
+  // Count unique employees by job level and site (as of today)
+  // Structure: jobLevel -> site -> Set of employee names
+  const jobLevelSiteCounts = new Map();
+  const allSites = new Set();
   
   rows.forEach(row => {
     const empName = String(row[COLUMN_INDICES.EMP_NAME] || "").trim();
@@ -1360,20 +1362,34 @@ function generateJobLevelHeadcount() {
     const startDate = parseDate(row[COLUMN_INDICES.START_DATE]);
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     const jobLevel = String(row[COLUMN_INDICES.JOB_LEVEL] || "").trim();
+    const site = String(row[COLUMN_INDICES.SITE] || "").trim();
     
     // Check if employee is active as of today
     if (!startDate || startDate > today) return; // Not started yet
     if (termDate && termDate <= today) return; // Already terminated
     
-    // Count unique employees by job level
-    if (!jobLevelCounts.has(jobLevel)) {
-      jobLevelCounts.set(jobLevel, new Set());
+    if (!jobLevel || !site) return;
+    
+    // Track all sites
+    allSites.add(site);
+    
+    // Count unique employees by job level and site
+    if (!jobLevelSiteCounts.has(jobLevel)) {
+      jobLevelSiteCounts.set(jobLevel, new Map());
     }
-    jobLevelCounts.get(jobLevel).add(empName);
+    const siteMap = jobLevelSiteCounts.get(jobLevel);
+    if (!siteMap.has(site)) {
+      siteMap.set(site, new Set());
+    }
+    siteMap.get(site).add(empName);
   });
   
-  // Sort job levels according to specified order
-  const sortedJobLevels = Array.from(jobLevelCounts.keys()).sort((a, b) => {
+  // Get sorted sites
+  const sortedSites = Array.from(allSites).sort();
+  
+  // Get all job levels that exist in data, sorted according to specified order
+  const allJobLevels = Array.from(jobLevelSiteCounts.keys());
+  const sortedJobLevels = allJobLevels.sort((a, b) => {
     const indexA = JOB_LEVEL_ORDER.indexOf(a);
     const indexB = JOB_LEVEL_ORDER.indexOf(b);
     
@@ -1387,29 +1403,95 @@ function generateJobLevelHeadcount() {
     return a.localeCompare(b);
   });
   
-  // Build table
-  const headers = ["Job Level", "Headcount"];
+  // Build Overall Summary table (Job Level, Total Headcount)
+  const overallHeaders = ["Job Level", "Headcount"];
+  jobLevelSheet.getRange(1, 1, 1, 2).setValues([overallHeaders]);
   if (isNewSheet) {
-    jobLevelSheet.getRange(1, 1, 1, 2).setValues([headers]);
     jobLevelSheet.getRange(1, 1, 1, 2).setFontWeight("bold");
-  } else {
-    jobLevelSheet.getRange(1, 1, 1, 2).setValues([headers]);
   }
   
-  const dataRows = sortedJobLevels.map(level => [
-    level,
-    jobLevelCounts.get(level).size
-  ]);
+  const overallDataRows = sortedJobLevels.map(level => {
+    const siteMap = jobLevelSiteCounts.get(level);
+    let total = 0;
+    siteMap.forEach(siteSet => {
+      total += siteSet.size;
+    });
+    return [level, total];
+  });
   
-  if (dataRows.length > 0) {
-    jobLevelSheet.getRange(2, 1, dataRows.length, 2).setValues(dataRows);
+  if (overallDataRows.length > 0) {
+    jobLevelSheet.getRange(2, 1, overallDataRows.length, 2).setValues(overallDataRows);
   }
   
+  // Build Site Breakdown table (Job Level, Site1, Site2, ..., Total)
+  const siteBreakdownStartRow = overallDataRows.length + 4; // Leave 2 blank rows
+  const siteHeaders = ["Job Level"].concat(sortedSites).concat(["Total"]);
+  jobLevelSheet.getRange(siteBreakdownStartRow, 1, 1, siteHeaders.length).setValues([siteHeaders]);
   if (isNewSheet) {
-    jobLevelSheet.autoResizeColumns(1, 2);
+    jobLevelSheet.getRange(siteBreakdownStartRow, 1, 1, siteHeaders.length).setFontWeight("bold");
   }
   
-  SpreadsheetApp.getUi().alert(`Job Level Headcount generated for ${sortedJobLevels.length} job levels as of today.`);
+  const siteBreakdownRows = sortedJobLevels.map(level => {
+    const siteMap = jobLevelSiteCounts.get(level);
+    const row = [level];
+    let total = 0;
+    
+    sortedSites.forEach(site => {
+      const count = siteMap.has(site) ? siteMap.get(site).size : 0;
+      row.push(count);
+      total += count;
+    });
+    
+    row.push(total);
+    return row;
+  });
+  
+  if (siteBreakdownRows.length > 0) {
+    jobLevelSheet.getRange(siteBreakdownStartRow + 1, 1, siteBreakdownRows.length, siteHeaders.length).setValues(siteBreakdownRows);
+  }
+  
+  // Auto-resize columns if new sheet
+  if (isNewSheet) {
+    jobLevelSheet.autoResizeColumns(1, Math.max(2, siteHeaders.length));
+  }
+  
+  // Create charts
+  try {
+    // Chart 1: Overall Job Level Headcount (Column Chart)
+    const overallChartRange = jobLevelSheet.getRange(1, 1, overallDataRows.length + 1, 2);
+    const overallChart = jobLevelSheet.newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(overallChartRange)
+      .setPosition(overallDataRows.length + 2, 4, 0, 0)
+      .setOption('title', 'Job Level Headcount (Overall)')
+      .setOption('legend.position', 'none')
+      .setOption('hAxis.title', 'Job Level')
+      .setOption('vAxis.title', 'Headcount')
+      .setOption('width', 600)
+      .setOption('height', 400)
+      .build();
+    jobLevelSheet.insertChart(overallChart);
+    
+    // Chart 2: Site Breakdown (Stacked Column Chart)
+    const siteChartRange = jobLevelSheet.getRange(siteBreakdownStartRow, 1, siteBreakdownRows.length + 1, siteHeaders.length);
+    const siteChart = jobLevelSheet.newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(siteChartRange)
+      .setPosition(siteBreakdownStartRow + siteBreakdownRows.length + 2, 4, 0, 0)
+      .setOption('title', 'Job Level Headcount by Site')
+      .setOption('isStacked', true)
+      .setOption('hAxis.title', 'Job Level')
+      .setOption('vAxis.title', 'Headcount')
+      .setOption('width', 800)
+      .setOption('height', 400)
+      .build();
+    jobLevelSheet.insertChart(siteChart);
+  } catch (e) {
+    Logger.log(`Error creating charts: ${e.message}`);
+    // Charts are optional, continue even if they fail
+  }
+  
+  SpreadsheetApp.getUi().alert(`Job Level Headcount generated for ${sortedJobLevels.length} job levels across ${sortedSites.length} sites as of today.`);
 }
 
 /**
