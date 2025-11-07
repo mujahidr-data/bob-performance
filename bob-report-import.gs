@@ -1091,6 +1091,19 @@ function generateHeadcountMetrics() {
     // If no time period filter, use all periods
   }
   
+  // Get site/ELT/Department filters from FilterConfig
+  let additionalFilters = {};
+  if (filterConfigSheet) {
+    const eltCell = filterConfigSheet.getRange(6, 2);
+    const deptCell = filterConfigSheet.getRange(7, 2);
+    
+    const elt = eltCell.getValue();
+    const dept = deptCell.getValue();
+    
+    if (elt) additionalFilters.elt = elt;
+    if (dept) additionalFilters.department = dept;
+  }
+  
   // Build table: Site/Metric as rows, Periods as columns
   const headerRow = ["Site / Metric"].concat(periods.map(p => p.label));
   
@@ -1124,7 +1137,9 @@ function generateHeadcountMetrics() {
       periods.forEach(period => {
         try {
           // Combine site filter with any other filters from FilterConfig
-          const periodFilters = Object.assign({ site: site }, filters);
+          const periodFilters = { site: site };
+          if (additionalFilters.elt) periodFilters.elt = additionalFilters.elt;
+          if (additionalFilters.department) periodFilters.department = additionalFilters.department;
           const metrics = calculateHRMetrics(period.start, period.end, periodFilters);
           
           let value = 0;
