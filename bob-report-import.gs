@@ -578,10 +578,12 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
   // - attrition = F4 / ((B4 + C4) / 2) where F4 = Voluntary Terms
   // - retention = (B4 - E4) / B4 where E4 = Terms
   // - turnover = E4 / ((B4 + C4) / 2) where E4 = Terms
+  // - regrettable turnover = Regrettable Terms / ((B4 + C4) / 2)
   const avgHC = (openingHC + closingHC) / 2;
   const attrition = avgHC > 0 ? (voluntaryTerms / avgHC) : 0;  // Attrition = Voluntary Terms / Avg HC
   const retention = openingHC > 0 ? ((openingHC - terms) / openingHC) : 0;  // Retention = (Opening HC - Terms) / Opening HC
   const turnover = avgHC > 0 ? (terms / avgHC) : 0;  // Turnover = Total Terms / Avg HC
+  const regrettableTurnover = avgHC > 0 ? (regrettableTerms / avgHC) : 0;  // Regrettable Turnover = Regrettable Terms / Avg HC
   
   return {
     openingHC,
@@ -594,7 +596,8 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     // Round to 4 decimal places for accurate percentage display (0.9680 = 96.80%)
     attrition: Math.round(attrition * 10000) / 10000,
     retention: Math.round(retention * 10000) / 10000,
-    turnover: Math.round(turnover * 10000) / 10000
+    turnover: Math.round(turnover * 10000) / 10000,
+    regrettableTurnover: Math.round(regrettableTurnover * 10000) / 10000
   };
 }
 
@@ -722,7 +725,8 @@ function generateOverallData() {
     "Regrettable",
     "Attrition %",
     "Retention %",
-    "Turnover %"
+    "Turnover %",
+    "Regrettable Turnover %"
   ];
   
   metricsSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -747,7 +751,8 @@ function generateOverallData() {
         metrics.regrettableTerms,
         metrics.attrition,
         metrics.retention,
-        metrics.turnover
+        metrics.turnover,
+        metrics.regrettableTurnover
       ]);
     } catch (error) {
       Logger.log(`Error calculating metrics for ${periods[i].label}: ${error.message}`);
@@ -781,10 +786,10 @@ function generateOverallData() {
   }
   
   // Only set percentage format if it's a new sheet (preserve user formatting on existing sheets)
-  // Percentage columns are now at columns 9, 10, 11 (Attrition %, Retention %, Turnover %)
+  // Percentage columns are at columns 9, 10, 11, 12 (Attrition %, Retention %, Turnover %, Regrettable Turnover %)
   const lastRow = values.length + 1;
   if (isNewSheet) {
-    metricsSheet.getRange(2, 9, lastRow - 1, 3).setNumberFormat("0.0%");
+    metricsSheet.getRange(2, 9, lastRow - 1, 4).setNumberFormat("0.0%");
   }
   
   // Only auto-resize columns if it's a new sheet (preserve user column widths)
