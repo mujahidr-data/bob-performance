@@ -632,16 +632,13 @@ function updateFilterOptions() {
 function generateHRMetrics() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let metricsSheet = ss.getSheetByName("HR Metrics");
+  const isNewSheet = !metricsSheet;
   
   if (!metricsSheet) {
     metricsSheet = ss.insertSheet("HR Metrics");
-  } else {
-    // Clear existing data but keep structure
-    const lastRow = metricsSheet.getLastRow();
-    if (lastRow > 1) {
-      metricsSheet.getRange(2, 1, lastRow - 1, metricsSheet.getLastColumn()).clearContent();
-    }
   }
+  // Don't clear content - preserve user formatting
+  // We'll just update the values directly
   
   // Get filter selections from a "FilterConfig" sheet if it exists
   let filters = {};
@@ -682,7 +679,7 @@ function generateHRMetrics() {
     currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
   }
   
-  // Write headers
+  // Write headers (only set formatting if it's a new sheet)
   const headers = [
     "Period",
     "Opening Headcount",
@@ -697,7 +694,10 @@ function generateHRMetrics() {
   ];
   
   metricsSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  metricsSheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  // Only set header formatting if it's a new sheet (preserve user formatting on existing sheets)
+  if (isNewSheet) {
+    metricsSheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  }
   
   // Calculate and write metrics for each period
   const values = [];
@@ -734,15 +734,28 @@ function generateHRMetrics() {
   }
   
   if (values.length > 0) {
+    // Update data values (preserves existing formatting)
     metricsSheet.getRange(2, 1, values.length, headers.length).setValues(values);
+    
+    // If there are more existing data rows than new data, clear the extra rows (but preserve formatting)
+    const existingLastRow = metricsSheet.getLastRow();
+    if (existingLastRow > values.length + 1) {
+      // Clear content only (not formatting) for rows beyond the new data
+      const rowsToClear = existingLastRow - (values.length + 1);
+      metricsSheet.getRange(values.length + 2, 1, rowsToClear, headers.length).clearContent();
+    }
   }
   
-  // Format percentage columns
+  // Only set percentage format if it's a new sheet (preserve user formatting on existing sheets)
   const lastRow = values.length + 1;
-  metricsSheet.getRange(2, 8, lastRow - 1, 3).setNumberFormat("0.0%");
+  if (isNewSheet) {
+    metricsSheet.getRange(2, 8, lastRow - 1, 3).setNumberFormat("0.0%");
+  }
   
-  // Auto-resize columns
-  metricsSheet.autoResizeColumns(1, headers.length);
+  // Only auto-resize columns if it's a new sheet (preserve user column widths)
+  if (isNewSheet) {
+    metricsSheet.autoResizeColumns(1, headers.length);
+  }
   
   // Add filter info if filters are applied
   if (Object.keys(filters).length > 0) {
