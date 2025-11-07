@@ -75,6 +75,9 @@ function onOpen() {
     .addItem('Generate Headcount by ELT', 'generateHeadcountByELT')
     .addItem('Generate Headcount by Job Level', 'generateHeadcountByJobLevel')
     .addItem('Generate Terminations Reasons Drilldown', 'generateTerminationsReasonsDrilldown')
+    .addSeparator()
+    // Help
+    .addItem('📖 Create/Update User Guide', 'createUserGuide')
     .addToUi();
 }
 
@@ -3131,5 +3134,172 @@ function hideProcessingSheets(ss) {
       sheet.hideSheet();
     }
   });
+}
+
+/**
+ * Creates a user-friendly guide sheet with instructions on how to use the HR Analytics tool
+ */
+function createUserGuide() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let guideSheet = ss.getSheetByName("User Guide");
+  
+  if (!guideSheet) {
+    guideSheet = ss.insertSheet("User Guide", 0); // Insert at the beginning
+  } else {
+    guideSheet.clear();
+  }
+  
+  // Hide gridlines
+  guideSheet.setHiddenGridlines(true);
+  
+  // Set column widths
+  guideSheet.setColumnWidth(1, 100);  // Column A - narrow for icons
+  guideSheet.setColumnWidth(2, 500);   // Column B - wide for content
+  
+  let currentRow = 1;
+  
+  // Title
+  guideSheet.getRange(currentRow, 1, 1, 2).merge();
+  guideSheet.getRange(currentRow, 1).setValue("📊 Bob HR Analytics - User Guide");
+  guideSheet.getRange(currentRow, 1).setFontSize(18);
+  guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+  guideSheet.getRange(currentRow, 1).setHorizontalAlignment("center");
+  guideSheet.getRange(currentRow, 1).setBackground("#4285f4");
+  guideSheet.getRange(currentRow, 1).setFontColor("#ffffff");
+  currentRow += 2;
+  
+  // Quick Start Section
+  guideSheet.getRange(currentRow, 1, 1, 2).merge();
+  guideSheet.getRange(currentRow, 1).setValue("🚀 Quick Start");
+  guideSheet.getRange(currentRow, 1).setFontSize(14);
+  guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+  guideSheet.getRange(currentRow, 1).setBackground("#e8f0fe");
+  currentRow += 1;
+  
+  const quickStartSteps = [
+    ["1️⃣", "Go to 'Bob HR Analytics' menu → 'Step 1: Fetch Bob Report'"],
+    ["2️⃣", "Go to 'Bob HR Analytics' menu → 'Step 4: Create Filter Config Sheet'"],
+    ["3️⃣", "In FilterConfig sheet, select your filters (or leave blank for all)"],
+    ["4️⃣", "Go to 'Bob HR Analytics' menu → Select the report you want to generate"],
+    ["5️⃣", "View your results in the generated sheet"]
+  ];
+  
+  quickStartSteps.forEach(step => {
+    guideSheet.getRange(currentRow, 1).setValue(step[0]);
+    guideSheet.getRange(currentRow, 1).setHorizontalAlignment("center");
+    guideSheet.getRange(currentRow, 2).setValue(step[1]);
+    guideSheet.getRange(currentRow, 2).setWrap(true);
+    currentRow += 1;
+  });
+  
+  currentRow += 1;
+  
+  // Available Reports Section
+  guideSheet.getRange(currentRow, 1, 1, 2).merge();
+  guideSheet.getRange(currentRow, 1).setValue("📈 Available Reports");
+  guideSheet.getRange(currentRow, 1).setFontSize(14);
+  guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+  guideSheet.getRange(currentRow, 1).setBackground("#e8f0fe");
+  currentRow += 1;
+  
+  const reports = [
+    ["📊 All CIQ", "Overall company HR metrics (headcount, hires, terminations, retention, etc.)"],
+    ["🏢 Headcount by Site", "Site-wise headcount breakdown with monthly metrics"],
+    ["👥 Headcount by ELT", "ELT-wise headcount breakdown with monthly metrics"],
+    ["💼 Headcount by Job Level", "Current job level distribution with interactive charts"],
+    ["📉 Terminations Reasons Drilldown", "Termination reasons analysis (Overall, by Site, by ELT)"]
+  ];
+  
+  reports.forEach(report => {
+    guideSheet.getRange(currentRow, 1).setValue(report[0]);
+    guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+    guideSheet.getRange(currentRow, 1).setHorizontalAlignment("center");
+    guideSheet.getRange(currentRow, 2).setValue(report[1]);
+    guideSheet.getRange(currentRow, 2).setWrap(true);
+    currentRow += 1;
+  });
+  
+  currentRow += 1;
+  
+  // Filtering Options Section
+  guideSheet.getRange(currentRow, 1, 1, 2).merge();
+  guideSheet.getRange(currentRow, 1).setValue("🔍 Filtering Options");
+  guideSheet.getRange(currentRow, 1).setFontSize(14);
+  guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+  guideSheet.getRange(currentRow, 1).setBackground("#e8f0fe");
+  currentRow += 1;
+  
+  const filterInfo = [
+    ["📅 Time Period", "Filter by Year, Year + Halves (H1/H2), or Year + Quarters (Q1-Q4)"],
+    ["🌍 Site", "Filter by specific site (e.g., India, UK, USA)"],
+    ["👤 ELT", "Filter by Executive Leadership Team member"],
+    ["🏛️ Department", "Filter by department (e.g., Engineering, Product)"],
+    ["📋 Termination Reason", "Filter terminations by specific reason"]
+  ];
+  
+  filterInfo.forEach(info => {
+    guideSheet.getRange(currentRow, 1).setValue(info[0]);
+    guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+    guideSheet.getRange(currentRow, 1).setHorizontalAlignment("center");
+    guideSheet.getRange(currentRow, 2).setValue(info[1]);
+    guideSheet.getRange(currentRow, 2).setWrap(true);
+    currentRow += 1;
+  });
+  
+  currentRow += 1;
+  
+  // Tips Section
+  guideSheet.getRange(currentRow, 1, 1, 2).merge();
+  guideSheet.getRange(currentRow, 1).setValue("💡 Tips & Best Practices");
+  guideSheet.getRange(currentRow, 1).setFontSize(14);
+  guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+  guideSheet.getRange(currentRow, 1).setBackground("#e8f0fe");
+  currentRow += 1;
+  
+  const tips = [
+    ["✨", "Always run 'Fetch Bob Report' first to get the latest data"],
+    ["🔄", "Use 'Update Filter Options' to see all available filter values"],
+    ["📊", "For aggregated views, select Year + Halves or Year + Quarters in FilterConfig"],
+    ["🎯", "Leave filters blank in FilterConfig to see all data"],
+    ["📱", "Processing sheets (RawData, FilterOptions) are automatically hidden after generation"],
+    ["⚡", "Each report clears old data but preserves your formatting"]
+  ];
+  
+  tips.forEach(tip => {
+    guideSheet.getRange(currentRow, 1).setValue(tip[0]);
+    guideSheet.getRange(currentRow, 1).setHorizontalAlignment("center");
+    guideSheet.getRange(currentRow, 2).setValue(tip[1]);
+    guideSheet.getRange(currentRow, 2).setWrap(true);
+    currentRow += 1;
+  });
+  
+  currentRow += 1;
+  
+  // Menu Location Section
+  guideSheet.getRange(currentRow, 1, 1, 2).merge();
+  guideSheet.getRange(currentRow, 1).setValue("📍 Where to Find Everything");
+  guideSheet.getRange(currentRow, 1).setFontSize(14);
+  guideSheet.getRange(currentRow, 1).setFontWeight("bold");
+  guideSheet.getRange(currentRow, 1).setBackground("#e8f0fe");
+  currentRow += 1;
+  
+  guideSheet.getRange(currentRow, 1, 1, 2).merge();
+  guideSheet.getRange(currentRow, 1).setValue("All functions are available in the 'Bob HR Analytics' menu at the top of the spreadsheet");
+  guideSheet.getRange(currentRow, 1).setWrap(true);
+  guideSheet.getRange(currentRow, 1).setFontStyle("italic");
+  currentRow += 1;
+  
+  // Format all content rows
+  const dataRange = guideSheet.getRange(2, 1, currentRow - 2, 2);
+  dataRange.setVerticalAlignment("top");
+  dataRange.setPadding(5, 5, 5, 5);
+  
+  // Add borders to title
+  guideSheet.getRange(1, 1).setBorder(true, true, true, true, true, true, "#4285f4", SpreadsheetApp.BorderStyle.SOLID);
+  
+  // Freeze header row
+  guideSheet.setFrozenRows(1);
+  
+  SpreadsheetApp.getUi().alert("User Guide created! Check the 'User Guide' sheet for instructions.");
 }
 
