@@ -105,12 +105,35 @@ function reassignELTValues() {
   let reassignmentCount = 0;
   const reassignments = [];
   
-  // Debug: Log first few ELT values to verify column index
-  Logger.log(`ELT Column Index: ${COLUMN_INDICES.ELT} (Column ${String.fromCharCode(65 + COLUMN_INDICES.ELT)})`);
-  Logger.log(`Sample ELT values from first 5 rows:`);
-  for (let i = 0; i < Math.min(5, rows.length); i++) {
-    Logger.log(`Row ${i + 2}: ELT="${rows[i][COLUMN_INDICES.ELT]}" (type: ${typeof rows[i][COLUMN_INDICES.ELT]})`);
-  }
+  // First, find the exact ELT names for Jyoti, Gaurav, and Himanshu from existing data
+  const allELTs = new Set();
+  rows.forEach(row => {
+    const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
+    if (elt) allELTs.add(elt);
+  });
+  
+  // Find exact names (case-insensitive search)
+  let jyotiName = null;
+  let gauravName = null;
+  let himanshuName = null;
+  
+  Array.from(allELTs).forEach(elt => {
+    const eltLower = elt.toLowerCase();
+    if (eltLower.startsWith("jyoti") && !jyotiName) {
+      jyotiName = elt;
+    } else if (eltLower.startsWith("gaurav") && !gauravName) {
+      gauravName = elt;
+    } else if (eltLower.startsWith("himanshu") && !himanshuName) {
+      himanshuName = elt;
+    }
+  });
+  
+  // Default to simple names if not found in data
+  if (!jyotiName) jyotiName = "Jyoti Gouri";
+  if (!gauravName) gauravName = "Gaurav Khanna";
+  if (!himanshuName) himanshuName = "Himanshu Jain";
+  
+  Logger.log(`Found ELT names: Jyoti="${jyotiName}", Gaurav="${gauravName}", Himanshu="${himanshuName}"`);
   
   // Process each row (skip header)
   rows.forEach((row, index) => {
@@ -129,20 +152,25 @@ function reassignELTValues() {
     
     let newELT = null;
     const eltLower = currentELT.toLowerCase();
+    const deptLower = department.toLowerCase();
     
-    // Rule 1: All "Heather" (or "Heather DeJong") → "Jyoti" (case-insensitive, matches if starts with)
+    // Rule 1: All "Heather" (or "Heather DeJong") → Jyoti (exact name from data)
     if (eltLower.startsWith("heather")) {
-      newELT = "Jyoti";
+      newELT = jyotiName;
     }
-    // Rule 2: All "Moni" (or "Moni Manor") → "Gaurav" if Department is "Engineering" or "Product Success" (case-insensitive)
+    // Rule 2: All "Moni" (or "Moni Manor") → Assign based on department
     else if (eltLower.startsWith("moni")) {
-      const deptLower = department.toLowerCase();
-      if (deptLower === "engineering" || deptLower === "product success") {
-        newELT = "Gaurav";
+      // Moni → Gaurav for: Engineering, Product Success, Data Science
+      if (deptLower === "engineering" || deptLower === "product success" || deptLower === "data science") {
+        newELT = gauravName;
       }
-      // Rule 3: All "Moni" → "Himanshu" if Department is "Product Management" or "Product Design"
+      // Moni → Himanshu for: Product Management, Product Design
       else if (deptLower === "product management" || deptLower === "product design") {
-        newELT = "Himanshu";
+        newELT = himanshuName;
+      }
+      // For any other department with Moni, default to Gaurav
+      else if (deptLower) {
+        newELT = gauravName;
       }
     }
     
