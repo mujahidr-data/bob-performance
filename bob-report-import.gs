@@ -781,9 +781,10 @@ function generateOverallData() {
   }
   
   // Only set percentage format if it's a new sheet (preserve user formatting on existing sheets)
+  // Percentage columns are now at columns 9, 10, 11 (Attrition %, Retention %, Turnover %)
   const lastRow = values.length + 1;
   if (isNewSheet) {
-    metricsSheet.getRange(2, 8, lastRow - 1, 3).setNumberFormat("0.0%");
+    metricsSheet.getRange(2, 9, lastRow - 1, 3).setNumberFormat("0.0%");
   }
   
   // Only auto-resize columns if it's a new sheet (preserve user column widths)
