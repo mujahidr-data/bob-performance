@@ -59,7 +59,8 @@ function onOpen() {
     // Step 2: Process/clean data
     .addItem('Step 2: Reassign ELT Values', 'reassignELTValues')
     .addItem('Step 2b: Fix Department Typos', 'fixDepartmentTypos')
-    .addItem('Map Termination Reasons', 'mapTerminationReasons')
+    .addItem('Step 2c: Create Termination Reason Mapping Sheet', 'createTerminationReasonMappingSheet')
+    .addItem('Step 2d: Map Termination Reasons', 'mapTerminationReasons')
     .addSeparator()
     // Step 3: Review available filters
     .addItem('Step 3: Update Filter Options', 'updateFilterOptions')
@@ -501,8 +502,8 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     
     const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
     const isVoluntary = termType === "Voluntary" || 
-                        termType === "Voluntary - Regrettable" || 
-                        termType === "Voluntary - Non regrettable";
+           termType === "Voluntary - Regrettable" || 
+           termType === "Voluntary - Non regrettable";
     if (isVoluntary) {
       voluntaryTermNames.add(empName);
     }
@@ -523,8 +524,8 @@ function calculateHRMetrics(periodStart, periodEnd, filters = {}) {
     
     const termType = String(row[COLUMN_INDICES.LEAVE_TERMINATION_TYPE] || "").trim();
     const isInvoluntary = termType === "Involuntary" || 
-                          termType === "Involuntary - Regrettable" || 
-                          termType === "End of Contract";
+           termType === "Involuntary - Regrettable" || 
+           termType === "End of Contract";
     if (isInvoluntary) {
       involuntaryTermNames.add(empName);
     }
@@ -744,7 +745,7 @@ function generateOverallData() {
   metricsSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   // Only set header formatting if it's a new sheet (preserve user formatting on existing sheets)
   if (isNewSheet) {
-    metricsSheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  metricsSheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
   }
   
   // Calculate and write metrics for each period
@@ -888,7 +889,7 @@ function generateOverallData() {
   
   // Only auto-resize columns if it's a new sheet (preserve user column widths)
   if (isNewSheet) {
-    metricsSheet.autoResizeColumns(1, headers.length);
+  metricsSheet.autoResizeColumns(1, headers.length);
   }
   
   // Add filter info if filters are applied
@@ -1548,13 +1549,21 @@ function generateJobLevelHeadcount() {
 }
 
 /**
- * Maps/cleans termination reasons based on user-provided mapping
- * This function will be updated when user provides the mapping
+ * Creates/updates a Termination Reason Mapping sheet for editing remappings
+ * Users can edit this sheet to map old reasons to new reasons
  */
-function mapTerminationReasons() {
+function createTerminationReasonMappingSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const rawDataSheet = ss.getSheetByName("RawData");
+  let mappingSheet = ss.getSheetByName("Termination Reason Mapping");
   
+  if (!mappingSheet) {
+    mappingSheet = ss.insertSheet("Termination Reason Mapping");
+  } else {
+    mappingSheet.clear();
+  }
+  
+  // Get unique termination reasons from RawData
+  const rawDataSheet = ss.getSheetByName("RawData");
   if (!rawDataSheet) {
     SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
     return;
@@ -1566,24 +1575,110 @@ function mapTerminationReasons() {
     return;
   }
   
+  const rows = data.slice(1);
+  const uniqueReasons = new Set();
+  
+  rows.forEach(row => {
+    const reason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+    if (reason) {
+      uniqueReasons.add(reason);
+    }
+  });
+  
+  // Create mapping table
+  const headers = ["Original Reason", "Mapped To", "Instructions"];
+  mappingSheet.getRange(1, 1, 1, 3).setValues([headers]);
+  mappingSheet.getRange(1, 1, 1, 3).setFontWeight("bold");
+  
+  // Add all unique reasons
+  const sortedReasons = Array.from(uniqueReasons).sort();
+  const mappingRows = sortedReasons.map(reason => [reason, reason, "Edit 'Mapped To' column to remap this reason"]);
+  
+  if (mappingRows.length > 0) {
+    mappingSheet.getRange(2, 1, mappingRows.length, 3).setValues(mappingRows);
+    
+    // Add data validation for "Mapped To" column - allow any text or selection from existing reasons
+    const mappedToRange = mappingSheet.getRange(2, 2, mappingRows.length, 1);
+    // Allow free text input (no strict validation, but users can type or use dropdown)
+    mappingSheet.getRange(2, 3, mappingRows.length, 1).setFontStyle("italic");
+    mappingSheet.getRange(2, 3, mappingRows.length, 1).setFontColor("#666666");
+  }
+  
+  // Add instructions
+  const instructionRow = mappingRows.length + 3;
+  mappingSheet.getRange(instructionRow, 1).setValue("Instructions:");
+  mappingSheet.getRange(instructionRow, 1).setFontWeight("bold");
+  mappingSheet.getRange(instructionRow + 1, 1).setValue("1. Edit the 'Mapped To' column to remap termination reasons");
+  mappingSheet.getRange(instructionRow + 2, 1).setValue("2. Leave 'Mapped To' same as 'Original Reason' to keep it unchanged");
+  mappingSheet.getRange(instructionRow + 3, 1).setValue("3. Use the same 'Mapped To' value for multiple reasons to consolidate them");
+  mappingSheet.getRange(instructionRow + 4, 1).setValue("4. Run 'Map Termination Reasons' from menu to apply the mappings");
+  
+  mappingSheet.autoResizeColumns(1, 3);
+  
+  SpreadsheetApp.getUi().alert(`Termination Reason Mapping sheet created with ${sortedReasons.length} unique reasons. Edit the 'Mapped To' column and run 'Map Termination Reasons' to apply.`);
+}
+
+/**
+ * Maps/cleans termination reasons based on mapping sheet
+ * Reads from "Termination Reason Mapping" sheet and applies mappings to RawData
+ */
+function mapTerminationReasons() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rawDataSheet = ss.getSheetByName("RawData");
+  
+  if (!rawDataSheet) {
+    SpreadsheetApp.getUi().alert("RawData sheet not found. Please run 'Fetch Bob Report' first.");
+    return;
+  }
+  
+  const mappingSheet = ss.getSheetByName("Termination Reason Mapping");
+  if (!mappingSheet) {
+    SpreadsheetApp.getUi().alert("Termination Reason Mapping sheet not found. Please run 'Create Termination Reason Mapping Sheet' first.");
+    return;
+  }
+  
+  // Read mapping from sheet
+  const mappingData = mappingSheet.getDataRange().getValues();
+  if (mappingData.length <= 1) {
+    SpreadsheetApp.getUi().alert("No mappings found in Termination Reason Mapping sheet.");
+    return;
+  }
+  
+  const mappingRows = mappingData.slice(1); // Skip header
+  const reasonMapping = {};
+  
+  mappingRows.forEach(row => {
+    const originalReason = String(row[0] || "").trim();
+    const mappedTo = String(row[1] || "").trim();
+    if (originalReason && mappedTo) {
+      reasonMapping[originalReason] = mappedTo;
+    }
+  });
+  
+  if (Object.keys(reasonMapping).length === 0) {
+    SpreadsheetApp.getUi().alert("No valid mappings found. Please edit the 'Mapped To' column in Termination Reason Mapping sheet.");
+    return;
+  }
+  
+  // Apply mappings to RawData
+  const data = rawDataSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    SpreadsheetApp.getUi().alert("No data found in RawData sheet.");
+    return;
+  }
+  
   const header = data[0];
   const rows = data.slice(1);
-  
-  // TODO: Add termination reason mapping when user provides it
-  // Example structure:
-  // const reasonMapping = {
-  //   "Old Reason 1": "New Reason 1",
-  //   "Old Reason 2": "New Reason 2"
-  // };
-  
-  const reasonMapping = {}; // Will be populated when user provides mapping
   
   let updateCount = 0;
   rows.forEach((row, index) => {
     const currentReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
     if (currentReason && reasonMapping.hasOwnProperty(currentReason)) {
-      row[COLUMN_INDICES.TERMINATION_REASON] = reasonMapping[currentReason];
-      updateCount++;
+      const newReason = reasonMapping[currentReason];
+      if (currentReason !== newReason) {
+        row[COLUMN_INDICES.TERMINATION_REASON] = newReason;
+        updateCount++;
+      }
     }
   });
   
@@ -1593,13 +1688,13 @@ function mapTerminationReasons() {
     targetRange.setValues(updatedData);
     SpreadsheetApp.getUi().alert(`Termination reasons mapped. ${updateCount} rows updated.`);
   } else {
-    SpreadsheetApp.getUi().alert("No termination reason mappings defined yet. Please add mappings to the function.");
+    SpreadsheetApp.getUi().alert("No changes needed. All termination reasons are already mapped correctly.");
   }
 }
 
 /**
  * Generates termination reasons table for pie chart
- * Filterable by time period (month/year, quarter, year)
+ * Filterable by time period (month/year, quarter, year), site, department, ELT
  */
 function generateTerminationReasonsTable() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1624,12 +1719,50 @@ function generateTerminationReasonsTable() {
   
   const rows = data.slice(1);
   
+  // Get filters from FilterConfig sheet
+  let filters = {};
+  const filterConfigSheet = ss.getSheetByName("FilterConfig");
+  if (filterConfigSheet) {
+    const siteCell = filterConfigSheet.getRange("B2"); // Row 2 for Site
+    const eltCell = filterConfigSheet.getRange("B3");  // Row 3 for ELT
+    const deptCell = filterConfigSheet.getRange("B4"); // Row 4 for Department
+    
+    const site = siteCell.getValue();
+    const elt = eltCell.getValue();
+    const dept = deptCell.getValue();
+    
+    if (site) filters.site = site;
+    if (elt) filters.elt = elt;
+    if (dept) filters.department = dept;
+  }
+  
+  // Get time period filters
+  let timePeriodFilter = null;
+  if (filterConfigSheet) {
+    const yearFilter = filterConfigSheet.getRange(11, 2).getValue(); // Year filter
+    const quarterFilter = filterConfigSheet.getRange(12, 2).getValue(); // Quarter filter
+    const monthYearFilter = filterConfigSheet.getRange(13, 2).getValue(); // Month-Year filter
+    
+    if (yearFilter) {
+      timePeriodFilter = { type: 'year', value: parseInt(yearFilter, 10) };
+    } else if (quarterFilter) {
+      timePeriodFilter = { type: 'quarter', value: parseInt(quarterFilter.replace("Q", ""), 10) };
+    } else if (monthYearFilter) {
+      const selectedMonths = monthYearFilter.split(",").map(m => m.trim());
+      timePeriodFilter = { type: 'month-year', value: selectedMonths };
+    }
+  }
+  
   // Helper function to parse date
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
     let date;
     if (dateStr instanceof Date) {
       date = dateStr;
+    } else if (typeof dateStr === 'number') {
+      // Google Sheets serial dates
+      const sheetsEpoch = new Date(1899, 11, 30);
+      date = new Date(sheetsEpoch.getTime() + dateStr * 86400000);
     } else if (typeof dateStr === 'string') {
       date = new Date(dateStr);
     }
@@ -1639,7 +1772,35 @@ function generateTerminationReasonsTable() {
     return null;
   };
   
-  // Count terminations by reason (all time, can be filtered later)
+  // Helper function to check if date matches time period filter
+  const matchesTimePeriod = (termDate) => {
+    if (!timePeriodFilter || !termDate) return true; // No filter = include all
+    
+    const termYear = termDate.getFullYear();
+    const termMonth = termDate.getMonth();
+    const termQuarter = Math.floor(termMonth / 3) + 1;
+    const termLabel = Utilities.formatDate(termDate, Session.getScriptTimeZone(), "MMM yyyy");
+    
+    if (timePeriodFilter.type === 'year') {
+      return termYear === timePeriodFilter.value;
+    } else if (timePeriodFilter.type === 'quarter') {
+      // For quarter, check if the month-year label matches any month in that quarter
+      // Q1: Jan, Feb, Mar; Q2: Apr, May, Jun; Q3: Jul, Aug, Sep; Q4: Oct, Nov, Dec
+      const quarterMonths = {
+        1: ['Jan', 'Feb', 'Mar'],
+        2: ['Apr', 'May', 'Jun'],
+        3: ['Jul', 'Aug', 'Sep'],
+        4: ['Oct', 'Nov', 'Dec']
+      };
+      const monthAbbr = termLabel.split(' ')[0];
+      return quarterMonths[timePeriodFilter.value] && quarterMonths[timePeriodFilter.value].includes(monthAbbr);
+    } else if (timePeriodFilter.type === 'month-year') {
+      return timePeriodFilter.value.includes(termLabel);
+    }
+    return true;
+  };
+  
+  // Count terminations by reason with filters applied
   const reasonCounts = new Map();
   
   rows.forEach(row => {
@@ -1648,8 +1809,19 @@ function generateTerminationReasonsTable() {
     
     const termDate = parseDate(row[COLUMN_INDICES.TERMINATION_DATE]);
     const termReason = String(row[COLUMN_INDICES.TERMINATION_REASON] || "").trim();
+    const site = String(row[COLUMN_INDICES.SITE] || "").trim();
+    const elt = String(row[COLUMN_INDICES.ELT] || "").trim();
+    const department = String(row[COLUMN_INDICES.DEPARTMENT] || "").trim();
     
     if (!termDate || !termReason) return; // Skip if no termination date or reason
+    
+    // Apply filters
+    if (filters.site && site !== filters.site) return;
+    if (filters.elt && elt !== filters.elt) return;
+    if (filters.department && department !== filters.department) return;
+    
+    // Apply time period filter
+    if (!matchesTimePeriod(termDate)) return;
     
     // Count unique employees by termination reason
     if (!reasonCounts.has(termReason)) {
@@ -1664,11 +1836,9 @@ function generateTerminationReasonsTable() {
   
   // Build table
   const headers = ["Termination Reason", "Count", "Percentage"];
+  termReasonsSheet.getRange(1, 1, 1, 3).setValues([headers]);
   if (isNewSheet) {
-    termReasonsSheet.getRange(1, 1, 1, 3).setValues([headers]);
     termReasonsSheet.getRange(1, 1, 1, 3).setFontWeight("bold");
-  } else {
-    termReasonsSheet.getRange(1, 1, 1, 3).setValues([headers]);
   }
   
   const totalTerms = Array.from(reasonCounts.values()).reduce((sum, set) => sum + set.size, 0);
@@ -1682,14 +1852,38 @@ function generateTerminationReasonsTable() {
   if (dataRows.length > 0) {
     termReasonsSheet.getRange(2, 1, dataRows.length, 3).setValues(dataRows);
     
-    // Format percentage column
-    if (isNewSheet) {
-      termReasonsSheet.getRange(2, 3, dataRows.length, 1).setNumberFormat("0.0%");
+    // Clear any extra rows if data shrunk
+    const existingLastRow = termReasonsSheet.getLastRow();
+    if (existingLastRow > dataRows.length + 1) {
+      const rowsToClear = existingLastRow - (dataRows.length + 1);
+      termReasonsSheet.getRange(dataRows.length + 2, 1, rowsToClear, 3).clearContent();
     }
+    
+    // Format percentage column
+    termReasonsSheet.getRange(2, 3, dataRows.length, 1).setNumberFormat("0.0%");
   }
   
   if (isNewSheet) {
     termReasonsSheet.autoResizeColumns(1, 3);
+  }
+  
+  // Add filter info if filters are applied
+  const filterInfoRow = dataRows.length + 3;
+  if (Object.keys(filters).length > 0 || timePeriodFilter) {
+    const filterInfo = ["Filters Applied:"];
+    if (filters.site) filterInfo.push(`Site: ${filters.site}`);
+    if (filters.elt) filterInfo.push(`ELT: ${filters.elt}`);
+    if (filters.department) filterInfo.push(`Department: ${filters.department}`);
+    if (timePeriodFilter) {
+      if (timePeriodFilter.type === 'year') {
+        filterInfo.push(`Year: ${timePeriodFilter.value}`);
+      } else if (timePeriodFilter.type === 'quarter') {
+        filterInfo.push(`Quarter: Q${timePeriodFilter.value}`);
+      } else if (timePeriodFilter.type === 'month-year') {
+        filterInfo.push(`Months: ${timePeriodFilter.value.join(", ")}`);
+      }
+    }
+    termReasonsSheet.getRange(filterInfoRow, 1, filterInfo.length, 1).setValues(filterInfo.map(f => [f]));
   }
   
   SpreadsheetApp.getUi().alert(`Termination Reasons table generated. ${sortedReasons.length} unique reasons found (${totalTerms} total terminations).`);
