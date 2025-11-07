@@ -1473,13 +1473,17 @@ function generateJobLevelHeadcount() {
     jobLevelSheet.insertChart(overallChart);
     
     // Chart 2: Site Breakdown (Stacked Column Chart)
-    const siteChartRange = jobLevelSheet.getRange(siteBreakdownStartRow, 1, siteBreakdownRows.length + 1, siteHeaders.length);
+    // Exclude the "Total" column - only include Job Level + Site columns
+    // Range: Job Level (col 1) + all sites (cols 2 to sortedSites.length + 1), excluding Total
+    const siteChartNumCols = sortedSites.length + 1; // Job Level + sites (excluding Total)
+    const siteChartRange = jobLevelSheet.getRange(siteBreakdownStartRow, 1, siteBreakdownRows.length + 1, siteChartNumCols);
     const siteChart = jobLevelSheet.newChart()
       .setChartType(Charts.ChartType.COLUMN)
       .addRange(siteChartRange)
       .setPosition(siteBreakdownStartRow + siteBreakdownRows.length + 2, 4, 0, 0)
       .setOption('title', 'Job Level Headcount by Site')
       .setOption('isStacked', true)
+      .setOption('legend.position', 'right')
       .setOption('hAxis.title', 'Job Level')
       .setOption('vAxis.title', 'Headcount')
       .setOption('width', 800)
