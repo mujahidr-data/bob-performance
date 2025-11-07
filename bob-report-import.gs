@@ -1075,21 +1075,27 @@ function generateHeadcountMetrics() {
     headcountSheet.getRange(2, 1, dataRows.length, headerRow.length).setValues(dataRows);
     
     // Format percentage columns (Attrition % and Regrettable %)
-    if (isNewSheet) {
-      // Find percentage rows (every 7th row starting from row 6 for each site)
-      const percentageRowIndices = [];
-      sites.forEach((site, siteIndex) => {
-        const baseRow = siteIndex * metricLabels.length + 2; // +2 because data starts at row 2
-        percentageRowIndices.push(baseRow + 5); // Attrition % row
-        percentageRowIndices.push(baseRow + 6); // Regrettable % row
-      });
-      
-      percentageRowIndices.forEach(rowIndex => {
-        if (rowIndex <= dataRows.length + 1) {
-          // Format all period columns (columns 2 onwards) as percentage
-          headcountSheet.getRange(rowIndex, 2, 1, periods.length).setNumberFormat("0.0%");
-        }
-      });
+    // These are at indices 5 and 6 in metricLabels array
+    if (isNewSheet && dataRows.length > 0) {
+      try {
+        // Format percentage rows: Attrition % (index 5) and Regrettable % (index 6)
+        // For each site, format rows at positions: baseRow + 5 and baseRow + 6
+        sites.forEach((site, siteIndex) => {
+          const baseRow = siteIndex * metricLabels.length + 2; // +2 because data starts at row 2
+          const attritionRow = baseRow + 5; // Attrition % is at index 5
+          const regrettableRow = baseRow + 6; // Regrettable % is at index 6
+          
+          if (attritionRow <= dataRows.length + 1) {
+            headcountSheet.getRange(attritionRow, 2, 1, periods.length).setNumberFormat("0.0%");
+          }
+          if (regrettableRow <= dataRows.length + 1) {
+            headcountSheet.getRange(regrettableRow, 2, 1, periods.length).setNumberFormat("0.0%");
+          }
+        });
+      } catch (error) {
+        Logger.log(`Error formatting percentage columns: ${error.message}`);
+        // Continue execution even if formatting fails
+      }
     }
   }
   
