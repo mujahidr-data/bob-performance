@@ -59,6 +59,7 @@ function onOpen() {
     // Step 2: Process/clean data
     .addItem('Step 2: Reassign ELT Values', 'reassignELTValues')
     .addItem('Step 2b: Fix Department Typos', 'fixDepartmentTypos')
+    .addItem('Map Termination Reasons', 'mapTerminationReasons')
     .addSeparator()
     // Step 3: Review available filters
     .addItem('Step 3: Update Filter Options', 'updateFilterOptions')
@@ -67,12 +68,11 @@ function onOpen() {
     .addSeparator()
     // Step 5: Generate metrics
     .addItem('Step 5: Generate Overall Data', 'generateOverallData')
+    .addSeparator()
+    // Additional reports
     .addItem('Generate Headcount Metrics', 'generateHeadcountMetrics')
     .addItem('Generate Job Level Headcount', 'generateJobLevelHeadcount')
     .addItem('Generate Termination Reasons Table', 'generateTerminationReasonsTable')
-    .addSeparator()
-    // Data cleaning
-    .addItem('Map Termination Reasons', 'mapTerminationReasons')
     .addToUi();
 }
 
