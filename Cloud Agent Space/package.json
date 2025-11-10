@@ -1,8 +1,8 @@
 {
-  "name": "bob-performance",
+  "name": "bob-performancemodule",
   "version": "1.0.0",
-  "description": "Bob Performance Report Automation - Downloads performance cycle reports from HiBob and uploads to Google Sheets",
-  "main": "HiBobReportHandler.gs",
+  "description": "Bob Performance Module - Downloads performance cycle reports from HiBob and uploads to Google Sheets",
+  "main": "bob-performance-module.gs",
   "scripts": {
     "push": "npm run clasp:push && npm run git:push",
     "clasp:push": "clasp push",
