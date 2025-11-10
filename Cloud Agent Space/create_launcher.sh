@@ -13,14 +13,50 @@ echo ""
 mkdir -p "${APP_PATH}/Contents/MacOS"
 mkdir -p "${APP_PATH}/Contents/Resources"
 
-# Create the executable script
-cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << 'EOF'
+# Get absolute project root path
+PROJECT_ROOT_ABS="$( cd "$SCRIPT_PATH" && pwd )"
+
+# Create the executable script with embedded project path
+cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << EOF
 #!/bin/bash
-# Get the directory where this app is located
-APP_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$( cd "$APP_DIR/../../.." && pwd )"
-cd "$PROJECT_ROOT"
-exec "$PROJECT_ROOT/scripts/shell/start_web_app.sh"
+# Project root path (embedded at app creation time)
+PROJECT_ROOT="$PROJECT_ROOT_ABS"
+
+# Change to project root
+cd "\$PROJECT_ROOT" || {
+    echo "❌ Error: Could not change to project directory: \$PROJECT_ROOT"
+    echo ""
+    echo "The project directory may have been moved."
+    echo "Please recreate the launcher app or run the script manually:"
+    echo "  cd \"\$PROJECT_ROOT\""
+    echo "  ./scripts/shell/start_web_app.sh"
+    echo ""
+    echo "Press Enter to close..."
+    read
+    exit 1
+}
+
+# Check if start script exists
+if [ ! -f "\$PROJECT_ROOT/scripts/shell/start_web_app.sh" ]; then
+    echo "❌ Error: Start script not found: \$PROJECT_ROOT/scripts/shell/start_web_app.sh"
+    echo ""
+    echo "The project structure may have changed."
+    echo "Press Enter to close..."
+    read
+    exit 1
+fi
+
+# Make script executable
+chmod +x "\$PROJECT_ROOT/scripts/shell/start_web_app.sh"
+
+# Run the start script
+"\$PROJECT_ROOT/scripts/shell/start_web_app.sh" || {
+    echo ""
+    echo "❌ Error: Web app failed to start"
+    echo "Press Enter to close..."
+    read
+    exit 1
+}
 EOF
 
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
