@@ -16,11 +16,20 @@ mkdir -p "${APP_PATH}/Contents/Resources"
 # Get absolute project root path
 PROJECT_ROOT_ABS="$( cd "$SCRIPT_PATH" && pwd )"
 
-# Create the executable script with embedded project path
-cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << EOF
+# Create a temporary script that will be run in Terminal
+TEMP_SCRIPT="/tmp/bob_web_launcher_$$.sh"
+cat > "$TEMP_SCRIPT" << EOF
 #!/bin/bash
-# Project root path (embedded at app creation time)
+# Project root path
 PROJECT_ROOT="$PROJECT_ROOT_ABS"
+
+# Clear screen
+clear
+
+echo "=========================================="
+echo "  Bob Web Interface Launcher"
+echo "=========================================="
+echo ""
 
 # Change to project root
 cd "\$PROJECT_ROOT" || {
@@ -49,8 +58,7 @@ fi
 # Make script executable
 chmod +x "\$PROJECT_ROOT/scripts/shell/start_web_app.sh"
 
-# Run the start script in foreground (don't background it)
-# This keeps the terminal window open
+# Run the start script
 "\$PROJECT_ROOT/scripts/shell/start_web_app.sh"
 
 # Capture exit code
@@ -68,6 +76,30 @@ echo "🛑 Web interface stopped."
 echo "Press Enter to close this window..."
 read
 exit \$EXIT_CODE
+EOF
+
+chmod +x "$TEMP_SCRIPT"
+
+# Create the executable script that opens Terminal
+cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << 'EOF'
+#!/bin/bash
+# Open Terminal.app and run the launcher script
+osascript << APPLESCRIPT
+tell application "Terminal"
+    activate
+    do script "$(cat /tmp/bob_web_launcher_*.sh 2>/dev/null | head -1)"
+end tell
+APPLESCRIPT
+EOF
+
+# Actually, let's use a simpler approach - create the script in the app bundle
+cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << EOF
+#!/bin/bash
+# Project root path (embedded at app creation time)
+PROJECT_ROOT="$PROJECT_ROOT_ABS"
+
+# Open Terminal and run the script
+osascript -e "tell application \"Terminal\" to do script \"cd \\\"\$PROJECT_ROOT\\\" && ./scripts/shell/start_web_app.sh; echo ''; echo 'Press Enter to close...'; read\""
 EOF
 
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
