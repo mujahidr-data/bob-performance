@@ -90,7 +90,7 @@ if not exist "config\config.json" (
 
 REM Get port from command line or use default
 set PORT=%1
-if "%PORT%"=="" set PORT=5000
+if "%PORT%"=="" set PORT=5001
 
 echo.
 echo [INFO] Starting web interface...

@@ -563,7 +563,7 @@ if __name__ == '__main__':
     import sys
     
     # Get port from command line or use default
-    port = 5000
+    port = 5001
     if len(sys.argv) > 1:
         try:
             port = int(sys.argv[1])

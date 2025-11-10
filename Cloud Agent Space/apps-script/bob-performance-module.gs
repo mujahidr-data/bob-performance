@@ -749,10 +749,10 @@ function launchWebInterface() {
       <div class="step">
         <span class="step-number">Step 2:</span> Open the web interface
         <br><br>
-        <a href="http://localhost:5000" target="_blank" class="button">
+        <a href="http://localhost:5001" target="_blank" class="button">
           🌐 Open Web Interface
         </a>
-        <a href="http://127.0.0.1:5000" target="_blank" class="button button-secondary">
+        <a href="http://127.0.0.1:5001" target="_blank" class="button button-secondary">
           🔗 Alternative URL
         </a>
       </div>
@@ -768,7 +768,7 @@ function launchWebInterface() {
       </div>
       
       <div class="step">
-        <strong>Default Port:</strong> 5000<br>
+        <strong>Default Port:</strong> 5001<br>
         <strong>Custom Port:</strong> Run <code>./start_web_app.sh 8080</code> to use port 8080
       </div>
       

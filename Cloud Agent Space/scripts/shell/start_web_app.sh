@@ -107,7 +107,7 @@ if [ ! -f "config/service_account.json" ]; then
 fi
 
 # Get port from command line or use default
-PORT=${1:-5000}
+PORT=${1:-5001}
 
 # Check if port is already in use
 if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1 ; then
