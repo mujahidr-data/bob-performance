@@ -7,8 +7,9 @@
  * 
  * All functionality is integrated into a single, optimized codebase.
  * 
- * @author Bob Performance Module
+ * @author MR
  * @version 2.0.0
+ * @published 2025-11-10
  * @since 2024
  * 
  * Requirements:
