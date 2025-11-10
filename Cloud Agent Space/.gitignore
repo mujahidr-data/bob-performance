@@ -1,5 +1,8 @@
 # Credentials
 config.json
+credentials.json
+service_account.json
+token.pickle
 
 # Clasp
 .clasprc.json

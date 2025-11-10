@@ -704,27 +704,71 @@ function doPost(e) {
       return createResponse(400, 'No data received');
     }
     
-    const boundary = extractBoundary(e.postData.type);
-    if (!boundary) {
-      return createResponse(400, 'Invalid content type. Expected multipart/form-data');
-    }
+    // Check if it's JSON data (new method) or multipart file (old method)
+    const contentType = e.postData.type || '';
     
-    const fileData = extractFileFromMultipart(e.postData.contents, boundary);
-    if (!fileData) {
-      return createResponse(400, 'No file found in request');
-    }
-    
-    Logger.log('File received: ' + fileData.filename);
-    const result = importFileToSheet(fileData);
-    
-    if (result.success) {
-      return createResponse(200, result.message, {
-        rowsImported: result.rowsImported,
-        sheetName: SHEET_NAMES.PERF_REPORT,
-        sheetId: PERF_SHEET_ID
-      });
+    if (contentType.includes('application/json')) {
+      // New method: JSON data with Excel content
+      try {
+        const jsonData = JSON.parse(e.postData.contents);
+        
+        if (!jsonData.data || !Array.isArray(jsonData.data)) {
+          Logger.log('Invalid JSON data structure');
+          return createResponse(400, 'Invalid JSON data. Expected "data" array.');
+        }
+        
+        const sheetName = jsonData.sheet_name || SHEET_NAMES.PERF_REPORT;
+        const filename = jsonData.filename || 'report.xlsx';
+        
+        Logger.log('JSON data received: ' + jsonData.data.length + ' rows, filename: ' + filename);
+        
+        // Check if data is too large
+        if (jsonData.data.length > 100000) {
+          Logger.log('Warning: Very large dataset: ' + jsonData.data.length + ' rows');
+        }
+        
+        const result = importDataToSheet(jsonData.data, sheetName);
+        
+        if (result.success) {
+          return createResponse(200, result.message, {
+            rowsImported: result.rowsImported,
+            sheetName: sheetName,
+            sheetId: PERF_SHEET_ID
+          });
+        } else {
+          Logger.log('Import failed: ' + result.message);
+          return createResponse(500, result.message);
+        }
+      } catch (parseError) {
+        Logger.log('JSON parse error: ' + parseError.toString());
+        Logger.log('Content type: ' + contentType);
+        Logger.log('Content length: ' + (e.postData.contents ? e.postData.contents.length : 0));
+        return createResponse(400, 'Failed to parse JSON: ' + parseError.toString());
+      }
     } else {
-      return createResponse(500, result.message);
+      // Old method: multipart file upload (for backward compatibility)
+      const boundary = extractBoundary(contentType);
+      if (!boundary) {
+        return createResponse(400, 'Invalid content type. Expected application/json or multipart/form-data');
+      }
+      
+      const fileData = extractFileFromMultipart(e.postData.contents, boundary);
+      if (!fileData) {
+        return createResponse(400, 'No file found in request');
+      }
+      
+      Logger.log('File received: ' + fileData.filename);
+      const result = importFileToSheet(fileData);
+      
+      if (result.success) {
+        return createResponse(200, result.message, {
+          rowsImported: result.rowsImported,
+          sheetName: SHEET_NAMES.PERF_REPORT,
+          sheetId: PERF_SHEET_ID
+        });
+      } else {
+        return createResponse(500, result.message);
+      }
     }
   } catch (error) {
     Logger.log('Error in doPost: ' + error.toString());
@@ -761,7 +805,68 @@ function getCredentialsAPI(e) {
 }
 
 /**
+ * Import data array directly to Google Sheet (for Performance Reports)
+ * This is the new method that receives parsed Excel data as JSON
+ */
+function importDataToSheet(data, sheetName) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(PERF_SHEET_ID);
+    let sheet = spreadsheet.getSheetByName(sheetName);
+    
+    if (sheet) {
+      sheet.clear();
+      Logger.log('Cleared existing sheet: ' + sheetName);
+    } else {
+      sheet = spreadsheet.insertSheet(sheetName);
+      Logger.log('Created new sheet: ' + sheetName);
+    }
+    
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        message: 'No data provided'
+      };
+    }
+    
+    const numRows = data.length;
+    const numCols = data[0].length;
+    
+    // Write data to sheet
+    sheet.getRange(1, 1, numRows, numCols).setValues(data);
+    
+    // Format header row
+    const headerRange = sheet.getRange(1, 1, 1, numCols);
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#4285f4');
+    headerRange.setFontColor('#ffffff');
+    
+    // Auto-resize columns
+    for (let i = 1; i <= numCols; i++) {
+      sheet.autoResizeColumn(i);
+    }
+    
+    // Freeze header row
+    sheet.setFrozenRows(1);
+    
+    Logger.log('Successfully imported ' + numRows + ' rows to ' + sheetName);
+    
+    return {
+      success: true,
+      message: 'Successfully imported report to Google Sheet',
+      rowsImported: numRows
+    };
+  } catch (error) {
+    Logger.log('Error importing to sheet: ' + error.toString());
+    return {
+      success: false,
+      message: 'Error importing to sheet: ' + error.toString()
+    };
+  }
+}
+
+/**
  * Import file to Google Sheet (for Performance Reports)
+ * This is the old method for backward compatibility with CSV files
  */
 function importFileToSheet(fileData) {
   try {
