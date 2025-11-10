@@ -1,0 +1,13 @@
+Google Apps Script Project ID: 1Pi7HmLV8K2v8q9ciiuZ1hbvFp1_NCyuM6svz2LsNiAK5oZ1zU-0qVF47
+
+This is the Apps Script project that contains the Bob Performance Module.
+The project is linked to the Google Sheet: 1rnpUlOcqTpny2Pve2L82qWGI9WplOetx-1Wba7ONoeA
+
+To push updates to this Apps Script project:
+  cd apps-script
+  npx @google/clasp push
+
+To open the project in browser:
+  cd apps-script
+  npx @google/clasp open
+

@@ -6,7 +6,7 @@
    - Go to: https://docs.google.com/spreadsheets/d/1rnpUlOcqTpny2Pve2L82qWGI9WplOetx-1Wba7ONoeA/edit
 
 2. **Click the Menu**
-   - Look for **"Bob Salary Data"** in the menu bar
+   - Look for **"🤖 Bob Automation"** in the menu bar
    - Click **"Performance Reports"** submenu
    - Click **"🚀 Launch Web Interface"**
 
@@ -42,13 +42,18 @@ The **"🚀 Launch Web Interface"** menu item:
 ## Menu Location
 
 ```
-Bob Salary Data
+🤖 Bob Automation
+  ├── Import Base Data
+  ├── Import Bonus History
+  ├── Import Compensation History
+  ├── Import Full Comp History
+  ├── Import All Data
+  ├── Convert Tenure to Array Formula
   └── Performance Reports
       ├── 🚀 Launch Web Interface  ← NEW!
       ├── Set HiBob Credentials
       ├── View Credentials Status
-      ├── Download Performance Report
-      └── Instructions
+      └── 📖 Instructions & Help
 ```
 
 ## Troubleshooting

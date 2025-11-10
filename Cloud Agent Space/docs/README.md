@@ -2,6 +2,8 @@
 
 Automated tool to download performance cycle reports from HiBob and upload them to Google Sheets.
 
+> **Note**: See the main `README.md` in the project root for the most up-to-date quick start guide and launcher information.
+
 ## Overview
 
 This automation:
