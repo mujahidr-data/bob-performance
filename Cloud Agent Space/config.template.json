@@ -1,0 +1,6 @@
+{
+  "email": "your-email@example.com",
+  "password": "your-password",
+  "apps_script_url": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"
+}
+

@@ -1,0 +1,33 @@
+{
+  "name": "bob-performance",
+  "version": "1.0.0",
+  "description": "Bob Performance Report Automation - Downloads performance cycle reports from HiBob and uploads to Google Sheets",
+  "main": "HiBobReportHandler.gs",
+  "scripts": {
+    "push": "npm run clasp:push && npm run git:push",
+    "clasp:push": "clasp push",
+    "pull": "clasp pull",
+    "open": "clasp open",
+    "deploy": "npm run push",
+    "git:push": "git add -A && git commit -m 'Auto-update: $(date +%Y-%m-%d\\ %H:%M:%S)' && git push || true",
+    "git:status": "git status",
+    "watch": "nodemon --watch '*.gs' --watch '*.js' --ext gs,js --exec 'npm run push'",
+    "auto-push": "./auto-push.sh",
+    "sync": "./deploy.sh",
+    "quick-push": "clasp push && git add -A && git commit -m 'Quick update' && git push || true"
+  },
+  "keywords": [
+    "google-apps-script",
+    "bob",
+    "hibob",
+    "performance-reports",
+    "hr-automation",
+    "playwright"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@google/clasp": "^3.1.1"
+  }
+}
+
