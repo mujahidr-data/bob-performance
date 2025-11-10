@@ -55,7 +55,7 @@ const PERF_SHEET_ID = '1rnpUlOcqTpny2Pve2L82qWGI9WplOetx-1Wba7ONoeA';
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Bob Salary Data')
+  ui.createMenu('🤖 Bob Automation')
     // Salary Data Import Functions
     .addItem('Import Base Data', 'importBobDataSimpleWithLookup')
     .addItem('Import Bonus History', 'importBobBonusHistoryLatest')
@@ -68,11 +68,12 @@ function onOpen() {
     .addSeparator()
     // Performance Reports Submenu
     .addSubMenu(ui.createMenu('Performance Reports')
+      .addItem('🚀 Launch Web Interface', 'launchWebInterface')
+      .addSeparator()
       .addItem('Set HiBob Credentials', 'setHiBobCredentials')
       .addItem('View Credentials Status', 'viewCredentialsStatus')
       .addSeparator()
-      .addItem('Download Performance Report', 'triggerPerformanceReportDownload')
-      .addItem('Instructions', 'showPerformanceReportInstructions'))
+      .addItem('📖 Instructions & Help', 'showPerformanceReportInstructions'))
     .addToUi();
 }
 
@@ -789,32 +790,6 @@ function launchWebInterface() {
  * Shows instructions for using the Performance Report automation
  */
 function showPerformanceReportInstructions() {
-  const ui = SpreadsheetApp.getUi();
-  const instructions = 
-    'HiBob Performance Report Automation\n\n' +
-    'SETUP:\n' +
-    '1. Click "Set HiBob Credentials" to store your login credentials\n' +
-    '2. Run the Python script on your local machine:\n' +
-    '   python3 hibob_report_downloader.py\n\n' +
-    'HOW IT WORKS:\n' +
-    '- The Python script will automatically use credentials stored in Apps Script\n' +
-    '- Or you can use credentials from config.json file\n' +
-    '- Reports are automatically uploaded to "Bob Perf Report" sheet\n\n' +
-    'LOCAL SETUP:\n' +
-    '1. Install: pip3 install -r requirements.txt\n' +
-    '2. Install browser: playwright install chromium\n' +
-    '3. Configure: Edit config.json with Apps Script URL\n' +
-    '4. Run: python3 hibob_report_downloader.py';
-  
-  ui.alert('Performance Report Instructions', instructions, ui.ButtonSet.OK);
-}
-
-/**
- * Launches the web interface for Performance Report automation
- * Opens a dialog with instructions and a link to the web interface
- * NOTE: This function is kept for future use but not currently in the menu
- */
-function launchWebInterface() {
   const html = HtmlService.createHtmlOutput(`
     <!DOCTYPE html>
     <html>
