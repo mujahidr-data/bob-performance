@@ -9,8 +9,8 @@ echo.
 
 REM Get the directory where this script is located
 cd /d "%~dp0"
-REM Change to project root (parent of scripts/)
-cd /d "%~dp0.."
+REM Change to project root (parent of scripts/shell, which is parent of scripts/)
+cd /d "%~dp0..\.."
 
 REM Check if Python 3 is available
 python --version >nul 2>&1

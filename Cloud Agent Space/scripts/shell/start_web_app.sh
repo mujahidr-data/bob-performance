@@ -9,8 +9,8 @@ echo ""
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# Change to project root (parent of scripts/)
-PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+# Change to project root (parent of scripts/shell, which is parent of scripts/)
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 cd "$PROJECT_ROOT"
 
 # Check if Python 3 is available
