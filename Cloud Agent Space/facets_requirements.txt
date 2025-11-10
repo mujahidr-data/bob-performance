@@ -1,0 +1,13 @@
+# Requirements for Facets deployment
+# Note: Playwright may require special handling on Facets
+
+playwright==1.40.0
+requests==2.31.0
+pandas==2.1.4
+openpyxl==3.1.2
+google-auth==2.25.2
+google-api-python-client==2.108.0
+
+# For serverless environments, you may need to install Chromium separately
+# Check Facets documentation for Playwright support
+

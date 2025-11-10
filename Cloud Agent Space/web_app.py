@@ -79,11 +79,46 @@ class WebHiBobDownloader(HiBobReportDownloader):
         print(f"[{status.upper()}] {message}")
     
     def start_browser(self):
-        """Start browser with web logging"""
-        self.log("🌐 Starting browser...", 'info')
+        """Start browser in headless mode (background) for web interface"""
+        self.log("🌐 Starting browser in background...", 'info')
         try:
-            super().start_browser()
-            self.log("✅ Browser started successfully", 'success')
+            from playwright.sync_api import sync_playwright
+            
+            self.playwright = sync_playwright().start()
+            
+            # Launch in headless mode (no visible window)
+            try:
+                self.browser = self.playwright.chromium.launch(
+                    headless=True,  # Run in background
+                    args=[
+                        '--disable-dev-shm-usage',
+                        '--no-sandbox'
+                    ]
+                )
+            except Exception as e:
+                self.log(f"⚠️  Headless launch failed, trying with minimal args: {str(e)}", 'warning')
+                # Fallback
+                self.browser = self.playwright.chromium.launch(headless=True)
+            
+            self.context = self.browser.new_context(
+                accept_downloads=True,
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            
+            # Set longer timeouts
+            self.context.set_default_timeout(60000)
+            self.context.set_default_navigation_timeout(60000)
+            
+            self.page = self.context.new_page()
+            
+            # Verify browser is running
+            try:
+                self.page.goto("about:blank", timeout=10000)
+                self.log("✅ Browser started successfully (running in background)", 'success')
+            except Exception as e:
+                self.log(f"⚠️  Browser verification warning: {str(e)}", 'warning')
+                
         except Exception as e:
             self.log(f"❌ Failed to start browser: {str(e)}", 'error')
             raise
@@ -300,11 +335,14 @@ def run_automation(report_name, selected_index=None):
     with status_lock:
         automation_status['running'] = True
         automation_status['status'] = 'running'
-        automation_status['message'] = 'Starting automation...'
+        automation_status['message'] = 'Initializing...'
         automation_status['reports'] = []
         automation_status['error'] = None
         automation_status['result'] = None
         automation_status['progress'] = []
+    
+    # Update status immediately to show we're starting
+    update_status('running', 'Starting automation...')
     
     downloader = None
     
@@ -411,12 +449,20 @@ def run_automation(report_name, selected_index=None):
     except Exception as e:
         update_status('error', f'Error: {str(e)}', error=str(e))
     finally:
-        # Clean up browser
+        # Clean up browser - ensure it's fully closed
         if downloader:
             try:
-                downloader.stop_browser()
-            except:
-                pass
+                # Close all pages first
+                if downloader.page and not downloader.page.is_closed():
+                    downloader.page.close()
+                # Close browser context
+                if downloader.context:
+                    downloader.context.close()
+                # Close browser
+                downloader.close_browser()
+                update_status('idle', 'Browser closed successfully')
+            except Exception as e:
+                update_status('idle', f'Browser cleanup: {str(e)}')
         
         with status_lock:
             automation_status['running'] = False
@@ -479,7 +525,14 @@ def stop_automation():
     downloader = automation_objects.get('downloader')
     if downloader:
         try:
-            downloader.stop_browser()
+            # Close all pages first
+            if downloader.page and not downloader.page.is_closed():
+                downloader.page.close()
+            # Close browser context
+            if downloader.context:
+                downloader.context.close()
+            # Close browser
+            downloader.close_browser()
         except:
             pass
     

@@ -5,7 +5,7 @@ Since clasp doesn't have a delete command, you need to manually delete old files
 ## Current Status
 
 After pulling, Apps Script shows:
-- ✅ `bob-consolidated.js` (or .gs) - This is the consolidated file
+- ✅ `bob-performance-module.gs` - This is the performance module file
 - ✅ `appsscript.json` - Manifest file
 
 ## Files to Delete in Apps Script
@@ -59,7 +59,7 @@ If the old files are still being tracked, you can:
 After deleting:
 
 1. **Check Apps Script:**
-   - Should only see `bob-consolidated.gs` and `appsscript.json`
+   - Should only see `bob-performance-module.gs` and `appsscript.json`
 
 2. **Test Menu:**
    - Open Google Sheet

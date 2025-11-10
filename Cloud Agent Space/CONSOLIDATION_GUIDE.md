@@ -9,8 +9,8 @@ This guide explains how to replace the existing multiple Apps Script files with 
 - `HiBobPerformanceMenu.gs` - Performance report menu
 - `HiBobReportHandler.gs` - File upload handler
 
-**After (1 consolidated file):**
-- `bob-consolidated.gs` - All functionality in one optimized file
+**After (1 module file):**
+- `bob-performance-module.gs` - All functionality in one optimized file
 
 ## Benefits of Consolidation
 
@@ -42,15 +42,15 @@ This guide explains how to replace the existing multiple Apps Script files with 
    - `HiBobPerformanceMenu.gs`
    - `HiBobReportHandler.gs`
    - `UPDATE_EXISTING_ONOPEN.gs` (if exists)
-3. Create new file: `bob-consolidated.gs`
-4. Copy entire contents of `bob-consolidated.gs` from this repository
+3. Create new file: `bob-performance-module.gs`
+4. Copy entire contents of `bob-performance-module.gs` from this repository
 5. Paste into the new file
 6. Save (Ctrl+S / Cmd+S)
 
 **Option B: Update Existing File**
 
 1. Open `bob-salary-data.js` in Apps Script
-2. Replace ALL contents with `bob-consolidated.gs`
+2. Replace ALL contents with `bob-performance-module.gs`
 3. Delete other files:
    - `HiBobPerformanceMenu.gs`
    - `HiBobReportHandler.gs`
@@ -106,7 +106,7 @@ After consolidating in Apps Script:
    ```
 
 2. **Update local files:**
-   - Keep `bob-consolidated.gs` as the main file
+   - Keep `bob-performance-module.gs` as the main file
    - Can delete old separate files (or keep as backup)
 
 3. **Update .clasp.json if needed:**
@@ -124,10 +124,10 @@ After consolidating in Apps Script:
 
 ```
 Apps Script Project:
-└── bob-consolidated.gs    (Single file with all functionality)
+└── bob-performance-module.gs    (Single file with all functionality)
 
 Local Repository:
-├── bob-consolidated.gs    (Main consolidated file)
+├── bob-performance-module.gs    (Main module file)
 ├── bob-salary-data.js     (Can be deleted or kept as backup)
 ├── HiBobPerformanceMenu.gs (Can be deleted or kept as backup)
 └── HiBobReportHandler.gs  (Can be deleted or kept as backup)

@@ -1,9 +1,9 @@
 /**
- * Bob Automation - Consolidated Google Apps Script
+ * Bob Performance Module - Google Apps Script
  * 
- * @fileoverview Comprehensive automation script for Bob (HiBob) HR platform integration
+ * @fileoverview Performance report automation module for Bob (HiBob) HR platform integration
  * 
- * This consolidated script provides:
+ * This module provides:
  * 1. Salary Data Management
  *    - Import Base Data, Bonus History, Compensation History
  *    - Automatic tenure calculations
@@ -19,8 +19,8 @@
  *    - Field selection with search functionality
  *    - Data validation and batch updates
  * 
- * @author Bob Automation Team
- * @version 2.0.0
+ * @author Bob Performance Module
+ * @version 3.0.0
  * @since 2024
  * 
  * Requirements:

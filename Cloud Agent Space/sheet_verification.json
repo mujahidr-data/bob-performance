@@ -1,0 +1,52 @@
+{
+  "spreadsheet_id": "1rnpUlOcqTpny2Pve2L82qWGI9WplOetx-1Wba7ONoeA",
+  "verification_date": "1762769909.2374008",
+  "current_sheets": [
+    "Summary",
+    "Paste Bob Perf Report Here",
+    "Base Data",
+    "Bonus History",
+    "Comp History",
+    "Full Comp History",
+    "Lookup",
+    "H1 2025",
+    "AYR 2024",
+    "Bob Perf Report"
+  ],
+  "expected_sheets": [
+    "Base Data",
+    "Bonus History",
+    "Comp History",
+    "Full Comp History",
+    "Bob Perf Report",
+    "Uploader",
+    "Bob Fields Meta Data",
+    "Bob Lists",
+    "Employees",
+    "History Uploader",
+    "Bob Updater Guide"
+  ],
+  "found_sheets": [
+    "Base Data",
+    "Bonus History",
+    "Comp History",
+    "Full Comp History",
+    "Bob Perf Report"
+  ],
+  "missing_sheets": [
+    "Uploader",
+    "Bob Fields Meta Data",
+    "Bob Lists",
+    "Employees",
+    "History Uploader",
+    "Bob Updater Guide"
+  ],
+  "unexpected_sheets": [
+    "AYR 2024",
+    "H1 2025",
+    "Lookup",
+    "Paste Bob Perf Report Here",
+    "Summary"
+  ],
+  "status": "mismatch"
+}

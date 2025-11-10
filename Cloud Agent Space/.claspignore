@@ -1,0 +1,18 @@
+# Ignore files that don't belong to this Apps Script project
+bob-consolidated.gs
+templates/
+web_app.py
+*.py
+*.json
+*.md
+*.sh
+*.bat
+*.png
+*.md
+analyze_manual_work.py
+explore_sheet.py
+facets_*
+performance_automation.py
+sheet_*.json
+start_web_app.*
+

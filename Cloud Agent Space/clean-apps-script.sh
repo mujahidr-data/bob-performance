@@ -6,9 +6,9 @@ echo "🧹 Cleaning up Apps Script files..."
 echo ""
 
 # Remove any duplicate .js files (Apps Script converts .gs to .js)
-if [ -f "bob-consolidated.js" ]; then
-    echo "Removing bob-consolidated.js (keeping .gs version)"
-    rm -f bob-consolidated.js
+if [ -f "bob-performance-module.js" ]; then
+    echo "Removing bob-performance-module.js (keeping .gs version)"
+    rm -f bob-performance-module.js
 fi
 
 # Ensure only consolidated file exists
@@ -31,6 +31,6 @@ echo "      - bob-salary-data.js (or .gs)"
 echo "      - HiBobPerformanceMenu.gs"
 echo "      - HiBobReportHandler.gs"
 echo "      - UPDATE_EXISTING_ONOPEN.gs"
-echo "   3. Keep only: bob-consolidated.gs (or .js) and appsscript.json"
+echo "   3. Keep only: bob-performance-module.gs (or .js) and appsscript.json"
 echo ""
 
