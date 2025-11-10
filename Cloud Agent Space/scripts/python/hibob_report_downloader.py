@@ -978,10 +978,25 @@ class HiBobReportDownloader:
             SHEET_NAME = 'Bob Perf Report'
             
             # Try service account first (better for automation)
-            service_account_file = Path('service_account.json')
+            # Look for service_account.json in multiple locations
+            project_root = Path(__file__).parent.parent.parent
+            possible_paths = [
+                project_root / "config" / "service_account.json",  # config/ folder
+                project_root / "service_account.json",  # project root
+                Path('service_account.json'),  # current directory
+                Path('config/service_account.json'),  # config/ relative to current dir
+            ]
+            
+            service_account_file = None
+            for path in possible_paths:
+                if path.exists():
+                    service_account_file = path
+                    print(f"   📁 Found service account at: {path}")
+                    break
+            
             creds = None
             
-            if service_account_file.exists():
+            if service_account_file:
                 print("   🔑 Using service account credentials...")
                 try:
                     creds = service_account.Credentials.from_service_account_file(
@@ -991,7 +1006,9 @@ class HiBobReportDownloader:
                     print("   ✓ Service account credentials loaded")
                 except Exception as e:
                     print(f"   ⚠️  Error loading service account: {str(e)}")
-                    print("   💡 Make sure service_account.json is valid and the sheet is shared with the service account email")
+                    print(f"   💡 Make sure {service_account_file} is valid and the sheet is shared with the service account email")
+                    import traceback
+                    print(f"   📋 Error details: {traceback.format_exc()}")
                     return False
             else:
                 # Fallback to OAuth2 (for user credentials)
@@ -1051,11 +1068,37 @@ class HiBobReportDownloader:
             
             # Build the service
             print("   🔗 Connecting to Google Sheets...")
-            service = build('sheets', 'v4', credentials=creds)
+            try:
+                service = build('sheets', 'v4', credentials=creds)
+                print("   ✓ Google Sheets service built successfully")
+            except Exception as e:
+                print(f"   ❌ Failed to build Google Sheets service: {str(e)}")
+                import traceback
+                print(f"   📋 Error details: {traceback.format_exc()}")
+                return False
             
             # Get or create the sheet
             print(f"   📋 Accessing sheet: {SHEET_NAME}")
-            spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+            try:
+                spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+                print(f"   ✓ Successfully accessed spreadsheet")
+            except Exception as e:
+                error_msg = str(e)
+                print(f"   ❌ Failed to access spreadsheet: {error_msg}")
+                if 'PERMISSION_DENIED' in error_msg or '403' in error_msg:
+                    if service_account_file:
+                        sa_email = creds.service_account_email if hasattr(creds, 'service_account_email') else 'unknown'
+                        print(f"   💡 Permission denied! Make sure the Google Sheet is shared with:")
+                        print(f"      Service account email: {sa_email}")
+                        print(f"      The sheet must be shared with 'Editor' permission")
+                    else:
+                        print(f"   💡 Permission denied! Make sure you have access to the sheet")
+                elif 'NOT_FOUND' in error_msg or '404' in error_msg:
+                    print(f"   💡 Sheet not found! Check that the Spreadsheet ID is correct:")
+                    print(f"      Current ID: {SPREADSHEET_ID}")
+                import traceback
+                print(f"   📋 Error details: {traceback.format_exc()}")
+                return False
             sheet_names = [sheet['properties']['title'] for sheet in spreadsheet.get('sheets', [])]
             
             if SHEET_NAME not in sheet_names:
@@ -1091,12 +1134,35 @@ class HiBobReportDownloader:
                 'values': data
             }
             
-            result = service.spreadsheets().values().update(
-                spreadsheetId=SPREADSHEET_ID,
-                range=range_name,
-                valueInputOption='RAW',
-                body=body
-            ).execute()
+            # Log upload details for debugging
+            print(f"   📊 Upload details:")
+            print(f"      - Spreadsheet ID: {SPREADSHEET_ID}")
+            print(f"      - Sheet name: {SHEET_NAME}")
+            print(f"      - Rows: {len(data)}")
+            print(f"      - Columns: {len(data[0]) if data else 0}")
+            print(f"      - Service account: {creds.service_account_email if hasattr(creds, 'service_account_email') else 'OAuth2'}")
+            
+            try:
+                result = service.spreadsheets().values().update(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body=body
+                ).execute()
+                print(f"   ✓ Successfully wrote data to sheet")
+            except Exception as e:
+                error_msg = str(e)
+                print(f"   ❌ Failed to write data to sheet: {error_msg}")
+                if 'PERMISSION_DENIED' in error_msg or '403' in error_msg:
+                    if service_account_file:
+                        sa_email = creds.service_account_email if hasattr(creds, 'service_account_email') else 'unknown'
+                        print(f"   💡 Permission denied! Make sure the Google Sheet is shared with:")
+                        print(f"      Service account email: {sa_email}")
+                    else:
+                        print(f"   💡 Permission denied! Make sure you have write access to the sheet")
+                import traceback
+                print(f"   📋 Error details: {traceback.format_exc()}")
+                return False
             
             updated_cells = result.get('updatedCells', 0)
             updated_rows = result.get('updatedRows', 0)
