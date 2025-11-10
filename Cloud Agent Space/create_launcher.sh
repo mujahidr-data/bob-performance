@@ -92,20 +92,17 @@ end tell
 APPLESCRIPT
 EOF
 
+# Escape the project root path for AppleScript (do it now, not at runtime)
+PROJECT_ROOT_ESCAPED=$(echo "$PROJECT_ROOT_ABS" | sed 's/"/\\"/g')
+
 # Create the executable script that opens Terminal.app
 cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << EOF
 #!/bin/bash
-# Project root path (embedded at app creation time)
-PROJECT_ROOT="$PROJECT_ROOT_ABS"
-
-# Escape the project root path for AppleScript
-PROJECT_ROOT_ESCAPED=\$(echo "\$PROJECT_ROOT" | sed 's/"/\\"/g')
-
 # Open Terminal.app and run the script
 osascript << APPLESCRIPT
 tell application "Terminal"
     activate
-    do script "cd \\"\$PROJECT_ROOT_ESCAPED\\" && ./scripts/shell/start_web_app.sh; echo ''; echo '🛑 Web interface stopped. Press Enter to close...'; read"
+    do script "cd \\"$PROJECT_ROOT_ESCAPED\\" && ./scripts/shell/start_web_app.sh; echo ''; echo '🛑 Web interface stopped. Press Enter to close...'; read"
 end tell
 APPLESCRIPT
 EOF
