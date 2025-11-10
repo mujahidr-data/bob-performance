@@ -25,7 +25,34 @@ EOF
 
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
 
+# Create or find icon
+ICON_PATH="$SCRIPT_PATH/../assets/bob_icon.icns"
+if [ ! -f "$ICON_PATH" ]; then
+    echo "📦 Creating icon..."
+    python3 "$SCRIPT_PATH/create_icon.py" > /dev/null 2>&1
+    if [ -f "$ICON_PATH" ]; then
+        echo "✅ Icon created"
+    fi
+fi
+
+# Copy icon to app if it exists
+if [ -f "$ICON_PATH" ]; then
+    cp "$ICON_PATH" "${APP_PATH}/Contents/Resources/app.icns"
+    ICON_SET="true"
+else
+    ICON_SET="false"
+fi
+
 # Create Info.plist
+if [ "$ICON_SET" = "true" ]; then
+    ICON_ENTRY="    <key>CFBundleIconFile</key>
+    <string>app.icns</string>
+    <key>CFBundleIconName</key>
+    <string>app.icns</string>"
+else
+    ICON_ENTRY=""
+fi
+
 cat > "${APP_PATH}/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -45,6 +72,7 @@ cat > "${APP_PATH}/Contents/Info.plist" << EOF
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.12</string>
+${ICON_ENTRY}
 </dict>
 </plist>
 EOF
