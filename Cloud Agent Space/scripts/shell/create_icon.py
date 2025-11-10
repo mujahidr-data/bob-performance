@@ -62,6 +62,23 @@ def create_icon_with_pil(output_path):
     
     return png_path
 
+def create_simple_icon_with_sips(png_path):
+    """Create a simple colored icon using sips"""
+    # Create a 512x512 PNG with Bob blue color (#667eea = RGB 102, 126, 234)
+    # Use sips to create a solid color image
+    temp_file = "/tmp/bob_temp.png"
+    os.system(f'sips -s format png -s formatOptions 100 -z 512 512 --setColor "102 126 234" /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns --out "{temp_file}" 2>/dev/null || echo "" > /dev/null')
+    
+    # If that didn't work, create a simple colored square
+    if not os.path.exists(temp_file) or os.path.getsize(temp_file) == 0:
+        # Create using ImageMagick or fallback to Python
+        os.system(f'python3 -c "from PIL import Image, ImageDraw, ImageFont; img = Image.new(\"RGB\", (512, 512), (102, 126, 234)); draw = ImageDraw.Draw(img); draw.ellipse([100, 100, 412, 412], fill=(255, 255, 255)); try: font = ImageFont.truetype(\"/System/Library/Fonts/Helvetica.ttc\", 200); except: font = ImageFont.load_default(); bbox = draw.textbbox((0, 0), \"B\", font=font); draw.text(((512 - (bbox[2]-bbox[0]))//2, (512 - (bbox[3]-bbox[1]))//2 - 20), \"B\", fill=(102, 126, 234), font=font); img.save(\"{png_path}\")" 2>/dev/null')
+    
+    if os.path.exists(temp_file) and os.path.getsize(temp_file) > 0:
+        os.rename(temp_file, png_path)
+        return True
+    return False
+
 def create_icon_with_sips(png_path, icns_path):
     """Convert PNG to ICNS using macOS sips command"""
     if os.path.exists(icns_path):
@@ -69,6 +86,9 @@ def create_icon_with_sips(png_path, icns_path):
     
     # Create iconset directory
     iconset_dir = icns_path.replace('.icns', '.iconset')
+    if os.path.exists(iconset_dir):
+        import shutil
+        shutil.rmtree(iconset_dir)
     os.makedirs(iconset_dir, exist_ok=True)
     
     # Generate all required sizes
@@ -81,7 +101,7 @@ def create_icon_with_sips(png_path, icns_path):
             os.system(f'sips -z {size*2} {size*2} "{png_path}" --out "{iconset_dir}/icon_{size}x{size}@2x.png" > /dev/null 2>&1')
     
     # Convert iconset to icns
-    os.system(f'iconutil -c icns "{iconset_dir}" -o "{icns_path}" > /dev/null 2>&1')
+    result = os.system(f'iconutil -c icns "{iconset_dir}" -o "{icns_path}" > /dev/null 2>&1')
     
     # Clean up iconset directory
     import shutil
@@ -105,13 +125,14 @@ def main():
     print("")
     
     if HAS_PIL:
-        create_icon_with_pil(icns_path)
-        png_path = icns_path.replace('.icns', '.png')
+        png_path = create_icon_with_pil(icns_path)
     else:
-        # Create a simple icon using sips from a solid color
-        # This is a fallback if PIL is not available
-        print("Creating simple icon...")
-        os.system(f'sips -s format png -z 512 512 --setColor "102 126 234" /dev/null --out "{png_path}" > /dev/null 2>&1')
+        # Create a simple icon using sips
+        print("Creating simple icon with sips...")
+        if not create_simple_icon_with_sips(png_path):
+            # Last resort: create a basic colored square
+            print("Using basic fallback...")
+            os.system(f'python3 -c "import sys; sys.path.insert(0, \"{os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))}/scripts/python\"); exec(\"from PIL import Image, ImageDraw; img = Image.new(\\\"RGB\\\", (512, 512), (102, 126, 234)); draw = ImageDraw.Draw(img); draw.ellipse([100, 100, 412, 412], fill=(255, 255, 255)); draw.text((200, 180), \\\"B\\\", fill=(102, 126, 234)); img.save(\\\"{png_path}\\\")\")" 2>/dev/null || echo "Icon creation failed"')
     
     # Convert to ICNS
     if os.path.exists(png_path):

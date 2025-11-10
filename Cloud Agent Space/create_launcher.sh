@@ -26,10 +26,10 @@ EOF
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
 
 # Create or find icon
-ICON_PATH="$SCRIPT_PATH/../assets/bob_icon.icns"
+ICON_PATH="$SCRIPT_PATH/../../assets/bob_icon.icns"
 if [ ! -f "$ICON_PATH" ]; then
     echo "📦 Creating icon..."
-    python3 "$SCRIPT_PATH/create_icon.py" > /dev/null 2>&1
+    python3 "$SCRIPT_PATH/create_icon.py" 2>&1 | grep -v "Creating\|Created\|Icon" || true
     if [ -f "$ICON_PATH" ]; then
         echo "✅ Icon created"
     fi
