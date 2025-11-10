@@ -563,8 +563,11 @@
                 return;
             }
             
-            // Immediately update UI to show processing state
+            // Reset button onclick to default (in case it was set to retry/restart)
             const startBtn = document.getElementById('startBtn');
+            startBtn.onclick = startAutomation;
+            
+            // Immediately update UI to show processing state
             const stopBtn = document.getElementById('stopBtn');
             const statusMsg = document.getElementById('statusMessage');
             const progressBarContainer = document.getElementById('progressBarContainer');
