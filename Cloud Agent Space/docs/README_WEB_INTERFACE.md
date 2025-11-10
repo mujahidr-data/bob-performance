@@ -2,17 +2,26 @@
 
 ## Starting the Web Interface
 
-### macOS / Linux
+### Option 1: Desktop App (Easiest) ⭐
+1. Double-click **`Bob Web Interface.app`** on your Desktop
+2. The web interface opens automatically at `http://localhost:5001`
+
+### Option 2: Command File
+1. Double-click **`Start Bob Web Interface.command`** in the project folder
+2. The web interface opens automatically
+
+### Option 3: Terminal Script (macOS/Linux)
 ```bash
-./start_web_app.sh
+cd "/Users/mujahidreza/Cursor/Cloud Agent Space"
+./scripts/shell/start_web_app.sh
 ```
 
 Or specify a custom port:
 ```bash
-./start_web_app.sh 8080
+./scripts/shell/start_web_app.sh 8080
 ```
 
-### Windows
+### Option 4: Terminal Script (Windows)
 ```cmd
 start_web_app.bat
 ```
@@ -36,7 +45,8 @@ start_web_app.bat 8080
 ## Accessing the Interface
 
 Once started, open your browser and go to:
-- `http://localhost:5000` (default port)
+- `http://localhost:5001` (default port)
+- `http://127.0.0.1:5001` (alternative URL)
 - Or the port shown in the terminal
 
 ## Features
@@ -50,15 +60,15 @@ Once started, open your browser and go to:
 ## Troubleshooting
 
 ### Port Already in Use
-If port 5000 is in use, the script will:
+If port 5001 is in use, the script will:
 - Ask if you want to use a different port
-- Or you can specify a port: `./start_web_app.sh 8080`
+- Or you can specify a port: `./scripts/shell/start_web_app.sh 8080`
 
 ### Missing Dependencies
 The script will detect and offer to install missing packages automatically.
 
 ### Browser Doesn't Open
-Just manually navigate to `http://localhost:5000` in your browser.
+Just manually navigate to `http://localhost:5001` in your browser.
 
 ## Stopping the Server
 
