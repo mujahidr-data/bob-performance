@@ -92,14 +92,22 @@ end tell
 APPLESCRIPT
 EOF
 
-# Actually, let's use a simpler approach - create the script in the app bundle
+# Create the executable script that opens Terminal.app
 cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << EOF
 #!/bin/bash
 # Project root path (embedded at app creation time)
 PROJECT_ROOT="$PROJECT_ROOT_ABS"
 
-# Open Terminal and run the script
-osascript -e "tell application \"Terminal\" to do script \"cd \\\"\$PROJECT_ROOT\\\" && ./scripts/shell/start_web_app.sh; echo ''; echo 'Press Enter to close...'; read\""
+# Escape the project root path for AppleScript
+PROJECT_ROOT_ESCAPED=\$(echo "\$PROJECT_ROOT" | sed 's/"/\\"/g')
+
+# Open Terminal.app and run the script
+osascript << APPLESCRIPT
+tell application "Terminal"
+    activate
+    do script "cd \\"\$PROJECT_ROOT_ESCAPED\\" && ./scripts/shell/start_web_app.sh; echo ''; echo '🛑 Web interface stopped. Press Enter to close...'; read"
+end tell
+APPLESCRIPT
 EOF
 
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
