@@ -19,6 +19,10 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "python"))
 from hibob_report_downloader import HiBobReportDownloader
 from werkzeug.serving import make_server
 
+# Global server instance for shutdown
+server = None
+shutdown_timer = None
+
 # Set template and static folders
 app = Flask(__name__, 
             template_folder=str(PROJECT_ROOT / "web" / "templates"),
@@ -340,9 +344,38 @@ class WebHiBobDownloader(HiBobReportDownloader):
             return [], []
 
 
+def schedule_auto_shutdown(delay_seconds=30):
+    """Schedule automatic shutdown of the Flask server"""
+    global shutdown_timer, server
+    
+    # Cancel any existing shutdown timer
+    if shutdown_timer:
+        shutdown_timer.cancel()
+    
+    def shutdown_server():
+        """Shutdown the Flask server"""
+        print(f"\n🛑 Auto-shutting down server after {delay_seconds} seconds...")
+        print("   (Automation completed - terminal will close)")
+        if server:
+            server.shutdown()
+        else:
+            # Fallback: use os._exit to force exit
+            os._exit(0)
+    
+    shutdown_timer = threading.Timer(delay_seconds, shutdown_server)
+    shutdown_timer.daemon = True
+    shutdown_timer.start()
+    print(f"⏰ Server will auto-shutdown in {delay_seconds} seconds after job completion...")
+
+
 def run_automation(report_name, selected_index=None):
     """Run automation in background thread"""
-    global automation_status
+    global automation_status, shutdown_timer
+    
+    # Cancel any existing shutdown timer when starting new automation
+    if shutdown_timer:
+        shutdown_timer.cancel()
+        shutdown_timer = None
     
     with status_lock:
         automation_status['running'] = True
@@ -505,6 +538,10 @@ def run_automation(report_name, selected_index=None):
                 if automation_status.get('status') not in ['error', 'success']:
                     automation_status['status'] = 'idle'
                     automation_status['message'] = 'Ready to start. Enter a report name and click "Start Automation".'
+        
+        # Schedule automatic shutdown after 30 seconds (gives user time to see results)
+        if error_occurred or success_occurred:
+            schedule_auto_shutdown(30)
 
 
 @app.route('/')
@@ -613,7 +650,11 @@ if __name__ == '__main__':
     print()
     
     try:
-        app.run(host='127.0.0.1', port=port, debug=True, threaded=True, use_reloader=False)
+        # Use make_server for better control over shutdown
+        global server
+        server = make_server('127.0.0.1', port, app, threaded=True)
+        print("✅ Server started successfully")
+        server.serve_forever()
     except OSError as e:
         if "Address already in use" in str(e):
             print(f"❌ Port {port} is already in use!")
@@ -622,4 +663,8 @@ if __name__ == '__main__':
         else:
             print(f"❌ Error starting server: {e}")
             raise
+    except KeyboardInterrupt:
+        print("\n🛑 Server stopped by user")
+    finally:
+        print("👋 Server shutting down...")
 

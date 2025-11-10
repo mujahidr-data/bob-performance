@@ -26,7 +26,7 @@ cat > "${APP_PATH}/Contents/MacOS/${APP_NAME}" << EOF
 osascript << APPLESCRIPT
 tell application "Terminal"
     activate
-    do script "cd \\"$PROJECT_ROOT_ESCAPED\\" && ./scripts/shell/start_web_app.sh; echo ''; echo '🛑 Web interface stopped. Press Enter to close...'; read"
+    do script "cd \\"$PROJECT_ROOT_ESCAPED\\" && ./scripts/shell/start_web_app.sh; echo ''; echo '🛑 Web interface stopped. Terminal will close automatically...'; sleep 2"
 end tell
 APPLESCRIPT
 EOF
