@@ -8,11 +8,13 @@ web_app.py
 *.sh
 *.bat
 *.png
-*.md
 analyze_manual_work.py
 explore_sheet.py
 facets_*
 performance_automation.py
 sheet_*.json
 start_web_app.*
+node_modules/
+**/node_modules/
+README*.md
 

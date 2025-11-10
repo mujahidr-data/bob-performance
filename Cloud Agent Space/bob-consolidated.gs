@@ -1,9 +1,9 @@
 /**
- * Bob Performance Module - Google Apps Script
+ * Bob Automation - Consolidated Google Apps Script
  * 
- * @fileoverview Performance report automation module for Bob (HiBob) HR platform integration
+ * @fileoverview Comprehensive automation script for Bob (HiBob) HR platform integration
  * 
- * This module provides:
+ * This consolidated script provides:
  * 1. Salary Data Management
  *    - Import Base Data, Bonus History, Compensation History
  *    - Automatic tenure calculations
@@ -14,8 +14,13 @@
  *    - Credentials management
  *    - Automated upload to Google Sheets
  * 
- * @author Bob Performance Module
- * @version 3.0.0
+ * 3. Field Uploader
+ *    - Update single field for multiple employees
+ *    - Field selection with search functionality
+ *    - Data validation and batch updates
+ * 
+ * @author Bob Automation Team
+ * @version 2.0.0
  * @since 2024
  * 
  * Requirements:
@@ -40,7 +45,13 @@ const SHEET_NAMES = {
   BONUS_HISTORY: "Bonus History",
   COMP_HISTORY: "Comp History",
   FULL_COMP_HISTORY: "Full Comp History",
-  PERF_REPORT: "Bob Perf Report"
+  PERF_REPORT: "Bob Perf Report",
+  UPLOADER: "Uploader",
+  BOB_FIELDS_META: "Bob Fields Meta Data",
+  BOB_LISTS: "Bob Lists",
+  EMPLOYEES: "Employees",
+  HISTORY_UPLOADER: "History Uploader",
+  GUIDE: "Bob Updater Guide"
 };
 
 const WRITE_COLS = 23; // Column W - limit for Base Data sheet
@@ -53,12 +64,20 @@ const ALLOWED_EMP_TYPES = new Set(["Permanent", "Regular Full-Time"]);
 const PERF_SHEET_ID = '1rnpUlOcqTpny2Pve2L82qWGI9WplOetx-1Wba7ONoeA';
 
 // ============================================================================
+// CONSTANTS - Field Uploader
+// ============================================================================
+
+const UPLOADER_START_ROW = 15; // Data starts at row 15 (after comprehensive instructions)
+const UPLOADER_CIQ_ID_COL = 1; // Column A
+const UPLOADER_VALUE_COL = 2; // Column B
+
+// ============================================================================
 // UI FUNCTIONS - Menu
 // ============================================================================
 
 /**
  * Creates unified menu when spreadsheet is opened
- * Combines Salary Data and Performance Report functions
+ * Combines Salary Data, Performance Report, and Field Uploader functions
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -82,6 +101,40 @@ function onOpen() {
       .addItem('View Credentials Status', 'viewCredentialsStatus')
       .addSeparator()
       .addItem('📖 Instructions & Help', 'showPerformanceReportInstructions'))
+    .addSeparator()
+    // Field Uploader Submenu
+    .addSubMenu(ui.createMenu('Field Uploader')
+      .addSubMenu(ui.createMenu('SETUP')
+        .addItem('1. Pull Fields', 'pullFields')
+        .addItem('2. Pull Lists', 'pullLists')
+        .addItem('3. Pull Employees', 'pullEmployees')
+        .addItem('>> Refresh Employees (Keep Filters)', 'refreshEmployeesKeepFilters')
+        .addSeparator()
+        .addItem('4. Setup Field Uploader', 'setupFieldUploader')
+        .addItem('5. Select Field to Update', 'selectFieldToUpdate')
+        .addSeparator()
+        .addItem('6. History Tables', 'showHistoryTablesMenu'))
+      .addSeparator()
+      .addSubMenu(ui.createMenu('VALIDATE')
+        .addItem('Validate Field Upload Data', 'validateFieldUploadData'))
+      .addSeparator()
+      .addSubMenu(ui.createMenu('UPLOAD')
+        .addItem('Upload Field Updates', 'uploadFieldUpdates'))
+      .addSeparator()
+      .addSubMenu(ui.createMenu('MONITORING')
+        .addItem('View Upload History', 'viewUploadHistory')
+        .addItem('Check Field Status', 'checkFieldStatus'))
+      .addSeparator()
+      .addSubMenu(ui.createMenu('CONTROL')
+        .addItem('Clear Uploader Sheet', 'clearUploaderSheet')
+        .addItem('Reset Selected Field', 'resetSelectedField'))
+      .addSeparator()
+      .addSubMenu(ui.createMenu('CLEANUP')
+        .addItem('Clean Empty Rows', 'cleanEmptyRows')
+        .addItem('Refresh All Data', 'refreshAllData'))
+      .addSeparator()
+      .addItem('📖 View Guide', 'viewBobUpdaterGuide')
+      .addItem('📝 Create/Update Guide', 'createBobUpdaterGuide'))
     .addToUi();
 }
 
@@ -981,7 +1034,7 @@ playwright install chromium<br><br>
 }
 
 // ============================================================================
-// WEB APP HANDLERS (doGet, doPost)
+// FIELD UPLOADER FUNCTIONS
 // ============================================================================
 
 /**
@@ -2317,6 +2370,11 @@ function updateEmployeeField(ciqId, fieldId, value) {
 
 // ============================================================================
 // WEB APP HANDLERS (doGet, doPost)
+// ============================================================================
+
+/**
+ * Handle GET requests (for credentials API)
+ */
 function doGet(e) {
   try {
     const action = e.parameter.action;
