@@ -25,8 +25,9 @@ EOF
 
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
 
-# Create or find icon
-ICON_PATH="$SCRIPT_PATH/../../assets/bob_icon.icns"
+# Create or find icon (use absolute path from project root)
+PROJECT_ROOT="$( cd "$SCRIPT_PATH/../.." && pwd )"
+ICON_PATH="$PROJECT_ROOT/assets/bob_icon.icns"
 ICON_SCRIPT="$SCRIPT_PATH/create_icon.py"
 if [ ! -f "$ICON_PATH" ]; then
     echo "📦 Creating icon..."
@@ -42,8 +43,10 @@ fi
 if [ -f "$ICON_PATH" ]; then
     cp "$ICON_PATH" "${APP_PATH}/Contents/Resources/app.icns"
     ICON_SET="true"
+    echo "✅ Icon added to app"
 else
     ICON_SET="false"
+    echo "⚠️  Icon not found (app will use default icon)"
 fi
 
 # Create Info.plist
