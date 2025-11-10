@@ -4,6 +4,12 @@
 
 set -e
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Change to project root (parent of scripts/)
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+cd "$PROJECT_ROOT"
+
 echo "🔄 Auto-push enabled: Changes will be pushed to Apps Script and Git"
 echo ""
 
@@ -14,12 +20,14 @@ push_changes() {
     echo "📝 Files changed: $files"
     echo ""
     
-    # Check if Apps Script files changed
-    if echo "$files" | grep -qE '\.(gs|js)$'; then
+    # Check if Apps Script files changed (in apps-script/ folder)
+    if echo "$files" | grep -qE '(apps-script/.*\.(gs|js)|\.clasp\.json)'; then
         echo "📤 Pushing to Apps Script..."
+        cd "$PROJECT_ROOT/apps-script" || exit 1
         clasp push || {
             echo "⚠️  Warning: Apps Script push failed"
         }
+        cd "$PROJECT_ROOT"
         echo ""
     fi
     

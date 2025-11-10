@@ -9,6 +9,8 @@ echo.
 
 REM Get the directory where this script is located
 cd /d "%~dp0"
+REM Change to project root (parent of scripts/)
+cd /d "%~dp0.."
 
 REM Check if Python 3 is available
 python --version >nul 2>&1
@@ -48,7 +50,7 @@ if defined MISSING (
     set /p INSTALL="Install missing dependencies? (y/n): "
     if /i "%INSTALL%"=="y" (
         echo [INFO] Installing dependencies...
-        pip install -r requirements.txt
+        pip install -r scripts\python\requirements.txt
         if errorlevel 1 (
             echo [ERROR] Failed to install dependencies
             pause
@@ -67,20 +69,20 @@ if defined MISSING (
 echo.
 
 REM Check if config.json exists
-if not exist "config.json" (
+if not exist "config\config.json" (
     echo [WARN] config.json not found
-    if exist "config.template.json" (
+    if exist "config\config.template.json" (
         echo    Creating config.json from template...
-        copy config.template.json config.json >nul
+        copy config\config.template.json config\config.json >nul
         echo [OK] config.json created
         echo.
-        echo [WARN] IMPORTANT: Please edit config.json with your credentials:
+        echo [WARN] IMPORTANT: Please edit config\config.json with your credentials:
         echo    - HiBob email
         echo    - HiBob password
         echo.
         pause
     ) else (
-        echo [ERROR] config.template.json not found
+        echo [ERROR] config\config.template.json not found
         pause
         exit /b 1
     )
@@ -112,7 +114,7 @@ timeout /t 2 /nobreak >nul
 start http://localhost:%PORT%
 
 REM Start the web app
-python web_app.py %PORT%
+python web\web_app.py %PORT%
 
 pause
 

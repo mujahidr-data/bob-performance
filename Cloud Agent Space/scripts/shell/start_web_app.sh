@@ -9,7 +9,9 @@ echo ""
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
+# Change to project root (parent of scripts/)
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+cd "$PROJECT_ROOT"
 
 # Check if Python 3 is available
 if ! command -v python3 &> /dev/null; then
@@ -48,7 +50,7 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "📥 Installing dependencies..."
-        pip3 install -r requirements.txt
+        pip3 install -r scripts/python/requirements.txt
         if [ $? -ne 0 ]; then
             echo "❌ Failed to install dependencies"
             exit 1
@@ -78,29 +80,29 @@ if ! python3 -c "from playwright.sync_api import sync_playwright; p = sync_playw
 fi
 
 # Check if config.json exists
-if [ ! -f "config.json" ]; then
+if [ ! -f "config/config.json" ]; then
     echo "⚠️  config.json not found"
-    if [ -f "config.template.json" ]; then
+    if [ -f "config/config.template.json" ]; then
         echo "   Creating config.json from template..."
-        cp config.template.json config.json
+        cp config/config.template.json config/config.json
         echo "✓ config.json created"
         echo ""
-        echo "⚠️  IMPORTANT: Please edit config.json with your credentials:"
+        echo "⚠️  IMPORTANT: Please edit config/config.json with your credentials:"
         echo "   - HiBob email"
         echo "   - HiBob password"
         echo ""
-        read -p "Press Enter to continue (you can edit config.json later)..."
+        read -p "Press Enter to continue (you can edit config/config.json later)..."
     else
-        echo "❌ config.template.json not found"
+        echo "❌ config/config.template.json not found"
         exit 1
     fi
 fi
 
 # Check if service_account.json exists (optional but recommended)
-if [ ! -f "service_account.json" ]; then
+if [ ! -f "config/service_account.json" ]; then
     echo "⚠️  service_account.json not found"
     echo "   Google Sheets upload will use OAuth2 (requires browser)"
-    echo "   For better automation, set up service_account.json (see GOOGLE_SHEETS_API_SETUP.md)"
+    echo "   For better automation, set up config/service_account.json (see docs/GOOGLE_SHEETS_API_SETUP.md)"
     echo ""
 fi
 
@@ -145,5 +147,5 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 # Start the web app
-python3 web_app.py $PORT
+python3 web/web_app.py $PORT
 

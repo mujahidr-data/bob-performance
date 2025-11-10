@@ -6,6 +6,13 @@
 
 set -e  # Exit on error
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Change to project root (parent of scripts/)
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+# Change to apps-script directory
+cd "$PROJECT_ROOT/apps-script" || exit 1
+
 echo "=========================================="
 echo "  Push to Google Apps Script with clasp"
 echo "=========================================="

@@ -12,8 +12,8 @@
     "git:push": "git add -A && git commit -m 'Auto-update: $(date +%Y-%m-%d\\ %H:%M:%S)' && git push || true",
     "git:status": "git status",
     "watch": "nodemon --watch '*.gs' --watch '*.js' --ext gs,js --exec 'npm run push'",
-    "auto-push": "./auto-push.sh",
-    "sync": "./deploy.sh",
+    "auto-push": "./scripts/shell/auto-push.sh",
+    "sync": "./scripts/shell/deploy.sh",
     "quick-push": "clasp push && git add -A && git commit -m 'Quick update' && git push || true"
   },
   "keywords": [

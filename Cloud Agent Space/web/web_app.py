@@ -9,10 +9,20 @@ import threading
 import time
 import json
 import os
+import sys
+from pathlib import Path
+
+# Add scripts/python to path for imports
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "python"))
+
 from hibob_report_downloader import HiBobReportDownloader
 from werkzeug.serving import make_server
 
-app = Flask(__name__)
+# Set template and static folders
+app = Flask(__name__, 
+            template_folder=str(PROJECT_ROOT / "web" / "templates"),
+            static_folder=str(PROJECT_ROOT / "web"))
 app.secret_key = os.urandom(24)  # For session management
 
 # Store automation status
@@ -69,7 +79,9 @@ def update_status(status, message='', reports=None, unique_reports=None, error=N
 class WebHiBobDownloader(HiBobReportDownloader):
     """Extended downloader that reports status to web interface"""
     
-    def __init__(self, config_path="config.json"):
+    def __init__(self, config_path=None):
+        if config_path is None:
+            config_path = str(PROJECT_ROOT / "config" / "config.json")
         super().__init__(config_path)
         self.web_callback = None
     
@@ -347,7 +359,8 @@ def run_automation(report_name, selected_index=None):
     downloader = None
     
     try:
-        downloader = WebHiBobDownloader()
+        config_path = str(PROJECT_ROOT / "config" / "config.json")
+        downloader = WebHiBobDownloader(config_path)
         
         # Start browser with error handling
         update_status('running', 'Starting browser...')

@@ -14,10 +14,19 @@ import requests
 
 
 class HiBobReportDownloader:
-    def __init__(self, config_path="config.json"):
+    def __init__(self, config_path=None):
         """Initialize the downloader with configuration."""
+        if config_path is None:
+            # Try to find config.json in config/ folder or root
+            project_root = Path(__file__).parent.parent.parent
+            config_path = project_root / "config" / "config.json"
+            if not config_path.exists():
+                config_path = project_root / "config.json"
+            config_path = str(config_path)
         self.config = self.load_config(config_path)
-        self.download_dir = Path("downloads")
+        # Downloads folder relative to project root
+        project_root = Path(__file__).parent.parent.parent
+        self.download_dir = project_root / "downloads"
         self.download_dir.mkdir(exist_ok=True)
         self.playwright = None
         self.browser = None

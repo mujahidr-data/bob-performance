@@ -2,6 +2,13 @@
 # Helper script to clean up Apps Script files
 # Note: clasp doesn't have delete command, so this just ensures only consolidated file is pushed
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Change to project root (parent of scripts/)
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+# Change to apps-script directory
+cd "$PROJECT_ROOT/apps-script" || exit 1
+
 echo "🧹 Cleaning up Apps Script files..."
 echo ""
 

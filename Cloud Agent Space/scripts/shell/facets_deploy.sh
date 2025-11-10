@@ -1,13 +1,19 @@
 #!/bin/bash
 # Deployment script for Facets Cloud Platform
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Change to project root (parent of scripts/)
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+cd "$PROJECT_ROOT"
+
 echo "=========================================="
 echo "Facets Deployment Preparation"
 echo "=========================================="
 echo ""
 
 # Check if service_account.json exists
-if [ ! -f "service_account.json" ]; then
+if [ ! -f "config/service_account.json" ]; then
     echo "⚠️  Warning: service_account.json not found"
     echo "   Make sure to set SERVICE_ACCOUNT_JSON environment variable in Facets"
     echo ""
@@ -16,9 +22,9 @@ fi
 # Check required files
 echo "📋 Checking required files..."
 required_files=(
-    "facets_handler.py"
-    "hibob_report_downloader.py"
-    "facets_requirements.txt"
+    "scripts/python/facets_handler.py"
+    "scripts/python/hibob_report_downloader.py"
+    "scripts/python/facets_requirements.txt"
 )
 
 for file in "${required_files[@]}"; do
@@ -31,10 +37,10 @@ done
 
 echo ""
 echo "📦 Files to upload to Facets:"
-echo "   1. facets_handler.py (entry point)"
-echo "   2. hibob_report_downloader.py (main automation)"
-echo "   3. facets_requirements.txt (dependencies)"
-echo "   4. config.template.json (reference)"
+echo "   1. scripts/python/facets_handler.py (entry point)"
+echo "   2. scripts/python/hibob_report_downloader.py (main automation)"
+echo "   3. scripts/python/facets_requirements.txt (dependencies)"
+echo "   4. config/config.template.json (reference)"
 echo ""
 echo "🔐 Environment Variables to set in Facets:"
 echo "   - HIBOB_EMAIL: Your HiBob email"

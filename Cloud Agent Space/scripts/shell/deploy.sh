@@ -3,15 +3,23 @@
 
 set -e
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Change to project root (parent of scripts/)
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+cd "$PROJECT_ROOT"
+
 echo "🚀 Deploying to Google Apps Script and Git..."
 echo ""
 
-# Push to Apps Script
+# Push to Apps Script (from apps-script folder)
 echo "📤 Pushing to Apps Script..."
+cd "$PROJECT_ROOT/apps-script" || exit 1
 clasp push || {
     echo "❌ Failed to push to Apps Script"
     exit 1
 }
+cd "$PROJECT_ROOT"
 
 # Git operations
 echo ""
