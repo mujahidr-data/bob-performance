@@ -49,14 +49,25 @@ fi
 # Make script executable
 chmod +x "\$PROJECT_ROOT/scripts/shell/start_web_app.sh"
 
-# Run the start script
-"\$PROJECT_ROOT/scripts/shell/start_web_app.sh" || {
+# Run the start script in foreground (don't background it)
+# This keeps the terminal window open
+"\$PROJECT_ROOT/scripts/shell/start_web_app.sh"
+
+# Capture exit code
+EXIT_CODE=\$?
+
+# If script exited (for any reason), keep terminal open
+if [ \$EXIT_CODE -ne 0 ]; then
     echo ""
-    echo "❌ Error: Web app failed to start"
-    echo "Press Enter to close..."
-    read
-    exit 1
-}
+    echo "❌ Web app exited with error code: \$EXIT_CODE"
+    echo ""
+fi
+
+echo ""
+echo "🛑 Web interface stopped."
+echo "Press Enter to close this window..."
+read
+exit \$EXIT_CODE
 EOF
 
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
