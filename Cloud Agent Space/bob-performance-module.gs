@@ -985,9 +985,9 @@ playwright install chromium<br><br>
 // ============================================================================
 
 /**
- * Pulls all available fields from Bob API and stores in metadata sheet
+ * Handle GET requests (for credentials API)
  */
-function pullFields() {
+function doGet(e) {
   try {
     const ui = SpreadsheetApp.getUi();
     ui.alert('Pulling Fields', 'This will fetch all available fields from Bob API. This may take a few minutes...', ui.ButtonSet.OK);
