@@ -508,12 +508,20 @@ def start_automation():
     if automation_status['running']:
         return jsonify({'error': 'Automation already running'}), 400
     
+    # Immediately update status to 'running' before starting thread
+    with status_lock:
+        automation_status['running'] = True
+        automation_status['status'] = 'running'
+        automation_status['message'] = 'Starting automation...'
+        automation_status['error'] = None
+        automation_status['progress'] = []
+    
     # Start in background thread
     thread = threading.Thread(target=run_automation, args=(report_name,))
     thread.daemon = True
     thread.start()
     
-    return jsonify({'status': 'started', 'message': 'Automation started'})
+    return jsonify({'status': 'running', 'message': 'Starting automation...'})
 
 
 @app.route('/api/select', methods=['POST'])
