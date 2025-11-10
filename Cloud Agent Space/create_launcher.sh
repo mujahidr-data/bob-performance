@@ -26,7 +26,8 @@ EOF
 chmod +x "${APP_PATH}/Contents/MacOS/${APP_NAME}"
 
 # Create or find icon (use absolute path from project root)
-PROJECT_ROOT="$( cd "$SCRIPT_PATH/../.." && pwd )"
+# SCRIPT_PATH is the directory containing this script (project root)
+PROJECT_ROOT="$SCRIPT_PATH"
 ICON_PATH="$PROJECT_ROOT/assets/bob_icon.icns"
 ICON_SCRIPT="$SCRIPT_PATH/create_icon.py"
 if [ ! -f "$ICON_PATH" ]; then
