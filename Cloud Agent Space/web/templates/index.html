@@ -475,13 +475,23 @@
                         statusMsg.innerHTML = `✅ ${data.message}`;
                         startBtn.disabled = false;
                         startBtn.classList.remove('processing');
-                        startBtn.textContent = '▶️ Start Automation';
+                        startBtn.textContent = '🔄 Restart';
+                        startBtn.onclick = () => {
+                            startBtn.textContent = '▶️ Start Automation';
+                            startBtn.onclick = startAutomation;
+                            startAutomation();
+                        };
                         stopBtn.classList.add('hidden');
                     } else if (data.status === 'error') {
                         statusMsg.innerHTML = `❌ ${data.message || data.error || 'An error occurred'}`;
                         startBtn.disabled = false;
                         startBtn.classList.remove('processing');
-                        startBtn.textContent = '▶️ Start Automation';
+                        startBtn.textContent = '🔄 Retry';
+                        startBtn.onclick = () => {
+                            startBtn.textContent = '▶️ Start Automation';
+                            startBtn.onclick = startAutomation;
+                            startAutomation();
+                        };
                         stopBtn.classList.add('hidden');
                     }
                     

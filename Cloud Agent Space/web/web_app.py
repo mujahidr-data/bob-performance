@@ -457,30 +457,54 @@ def run_automation(report_name, selected_index=None):
             update_status('success', '✅ Process completed successfully!', 
                         result=f'Report uploaded to Google Sheets: {filepath}')
         else:
-            update_status('error', 'Upload failed', error='Failed to upload to Google Sheets')
+            update_status('error', '❌ Upload failed to Google Sheets', error='Failed to upload to Google Sheets')
         
     except Exception as e:
-        update_status('error', f'Error: {str(e)}', error=str(e))
+        update_status('error', f'❌ Error: {str(e)}', error=str(e))
     finally:
+        # Check if error occurred before cleanup
+        error_occurred = False
+        success_occurred = False
+        with status_lock:
+            current_status = automation_status.get('status', 'idle')
+            if current_status == 'error':
+                error_occurred = True
+            elif current_status == 'success':
+                success_occurred = True
+        
         # Clean up browser - ensure it's fully closed
         if downloader:
             try:
                 # Close all pages first
-                if downloader.page and not downloader.page.is_closed():
+                if hasattr(downloader, 'page') and downloader.page and not downloader.page.is_closed():
                     downloader.page.close()
                 # Close browser context
-                if downloader.context:
+                if hasattr(downloader, 'context') and downloader.context:
                     downloader.context.close()
                 # Close browser
-                downloader.close_browser()
-                update_status('idle', 'Browser closed successfully')
+                if hasattr(downloader, 'close_browser'):
+                    downloader.close_browser()
+                # Also try to close playwright instance
+                if hasattr(downloader, 'playwright') and downloader.playwright:
+                    try:
+                        downloader.playwright.stop()
+                    except:
+                        pass
             except Exception as e:
-                update_status('idle', f'Browser cleanup: {str(e)}')
+                # Log cleanup error but don't overwrite status
+                print(f"Browser cleanup error: {e}")
         
+        # Update status lock - preserve error/success status
         with status_lock:
             automation_status['running'] = False
             automation_objects['downloader'] = None
             automation_objects['unique_reports'] = []
+            # Preserve error or success status - don't change to idle
+            if not error_occurred and not success_occurred:
+                # Only change to idle if we're not in error or success state
+                if automation_status.get('status') not in ['error', 'success']:
+                    automation_status['status'] = 'idle'
+                    automation_status['message'] = 'Ready to start. Enter a report name and click "Start Automation".'
 
 
 @app.route('/')
