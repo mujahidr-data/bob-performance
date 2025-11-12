@@ -707,6 +707,136 @@ function triggerPerformanceReportDownload() {
 }
 
 /**
+ * Generate Manager Blurbs using AI-powered summarization
+ * Provides instructions for running the Python script
+ */
+function generateManagerBlurbs() {
+  const html = HtmlService.createHtmlOutput(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <base target="_top">
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          padding: 20px;
+          max-width: 700px;
+          margin: 0 auto;
+        }
+        h2 {
+          color: #9825ff;
+          margin-top: 0;
+        }
+        .step {
+          background: #f8f9fa;
+          padding: 15px;
+          margin: 10px 0;
+          border-radius: 8px;
+          border-left: 4px solid #9825ff;
+        }
+        .step-number {
+          font-weight: bold;
+          color: #9825ff;
+        }
+        .code {
+          background: #2d2d2d;
+          color: #f8f8f2;
+          padding: 10px;
+          border-radius: 5px;
+          font-family: 'Courier New', monospace;
+          margin: 10px 0;
+          overflow-x: auto;
+          font-size: 13px;
+        }
+        .info {
+          background: #d1ecf1;
+          border-left: 4px solid #0c5460;
+          padding: 10px;
+          border-radius: 5px;
+          margin: 10px 0;
+        }
+        .warning {
+          background: #fff3cd;
+          border-left: 4px solid #ffc107;
+          padding: 10px;
+          border-radius: 5px;
+          margin: 10px 0;
+        }
+        ul {
+          line-height: 1.6;
+        }
+      </style>
+    </head>
+    <body>
+      <h2>🤖 Generate Manager Blurbs</h2>
+      
+      <div class="info">
+        ℹ️ <strong>About:</strong> This feature uses AI (BART model) to summarize manager feedback into concise 50-60 word performance review blurbs. 
+        Blurbs are stored in a hidden "Manager Blurbs" sheet and automatically referenced in the Summary sheet.
+      </div>
+      
+      <div class="step">
+        <span class="step-number">Step 1:</span> Ensure you have the required Python libraries
+        <div class="code">pip install transformers torch google-auth google-api-python-client</div>
+      </div>
+      
+      <div class="step">
+        <span class="step-number">Step 2:</span> Make sure Bob Perf Report contains manager feedback
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li>Import the Performance Report (via Web Interface)</li>
+          <li>Verify the sheet contains columns with manager comments</li>
+          <li>Expected columns: leadership strength/improvement, AI readiness, performance comments, etc.</li>
+        </ul>
+      </div>
+      
+      <div class="step">
+        <span class="step-number">Step 3:</span> Run the Manager Blurb Generator script
+        <div class="code">cd scripts/python<br>python3 manager_blurb_generator.py</div>
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">
+          ⏱️ Note: First run may take 1-2 minutes to download the AI model
+        </p>
+      </div>
+      
+      <div class="warning">
+        ⚠️ <strong>Processing Time:</strong> The script will process all employees and generate blurbs using AI. 
+        This may take 2-5 minutes depending on the number of employees and your machine's performance.
+      </div>
+      
+      <div class="step">
+        <span class="step-number">Step 4:</span> Refresh the Summary sheet
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li>Run "Build Summary Sheet" from the menu</li>
+          <li>The "Manager Blurb" column will auto-populate from the hidden sheet</li>
+          <li>If no blurb is found, it will show "No blurb generated"</li>
+        </ul>
+      </div>
+      
+      <div class="info">
+        💡 <strong>Blurb Format:</strong>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li>Starts with action verbs (Delivered, Demonstrated, etc.)</li>
+          <li>Highlights AI adoption where relevant</li>
+          <li>Ends with development/growth focus</li>
+          <li>Gender-neutral, performance-review tone</li>
+          <li>~50-60 words, free of filler and leadership jargon</li>
+        </ul>
+      </div>
+      
+      <p style="text-align: center; color: #666; margin-top: 30px;">
+        <button onclick="google.script.host.close()" style="background: #9825ff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px;">
+          ✓ Got it
+        </button>
+      </p>
+    </body>
+    </html>
+  `)
+    .setWidth(750)
+    .setHeight(650);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, '🤖 Manager Blurb Generator');
+}
+
+/**
  * Launches the web interface for Performance Report automation
  * Opens a dialog with instructions and a link to the web interface
  */
@@ -1769,7 +1899,7 @@ function buildSummarySheet() {
       "Department", "ELT", "Location", "AYR 2024 Rating", "H1 2025", "Q2/Q3 Rating", 
       "Promotion", "Last Promotion Date", "Last Increase Date", "Last Increase %", 
       "Change Reason", "Base Salary (Local)", "Base Salary (USD)", "Variable Type", 
-      "Variable %", "Notice Period"
+      "Variable %", "Notice Period", "Manager Blurb"
     ];
     
     const dataRows = [];
@@ -1896,10 +2026,13 @@ function buildSummarySheet() {
       // We'll set this as a formula later: check if termination date exists for active employee
       const noticePeriod = ""; // Will be set as formula
       
+      // Manager Blurb - will be set as VLOOKUP formula to hidden sheet
+      const managerBlurb = ""; // Will be set as formula
+      
       dataRows.push([
         empIdVal, empName, startDate, tenure, jobTitle, level, manager, department, elt, location,
         ayrRating, h1Rating, q23Rating, promotion, lastPromoDate, lastIncreaseDate, 
-        lastIncreasePct, changeReason, baseSalary, baseSalaryUSD, variableType, variablePct, noticePeriod
+        lastIncreasePct, changeReason, baseSalary, baseSalaryUSD, variableType, variablePct, noticePeriod, managerBlurb
       ]);
     });
     
@@ -1926,6 +2059,15 @@ function buildSummarySheet() {
       const noticePeriodRange = summarySheet.getRange(startRow + 1, noticePeriodCol, dataRows.length, 1);
       noticePeriodRange.setValues(noticePeriodValues);
       noticePeriodRange.setNumberFormat("dd-mmm-yy");
+      
+      // Set Manager Blurb formulas (column 24) - VLOOKUP from hidden 'Manager Blurbs' sheet
+      // Formula: =IFERROR(VLOOKUP($A{row},'Manager Blurbs'!$A:$B,2,FALSE),"")
+      const managerBlurbCol = 24;
+      const managerBlurbFormulas = dataRows.map((_, i) => [`=IFERROR(VLOOKUP($A${startRow + 1 + i},'Manager Blurbs'!$A:$B,2,FALSE),"No blurb generated")`]);
+      const managerBlurbRange = summarySheet.getRange(startRow + 1, managerBlurbCol, dataRows.length, 1);
+      managerBlurbRange.setFormulas(managerBlurbFormulas);
+      // Wrap text for better readability
+      managerBlurbRange.setWrap(true);
     }
     
     // Format header row

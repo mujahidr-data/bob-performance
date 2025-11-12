@@ -1,0 +1,19 @@
+# Bob Performance Module - Python Requirements
+
+# Google Sheets API
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# Browser automation
+playwright==1.40.0
+
+# Web application
+Flask==3.0.0
+Flask-CORS==4.0.0
+
+# AI/ML for manager blurb generation
+transformers==4.36.0
+torch==2.1.1
+
