@@ -2383,6 +2383,9 @@ function buildSummarySheet() {
       
       // Update chart data formulas - only update the range references
       updateChartDataFormulas(summarySheet, dataRows.length, startRow, helperCol);
+      
+      // Update slicer ranges to match new data size
+      updateSlicerRanges(summarySheet, dataRows.length, startRow - 1);
     }
     
     Logger.log(`Summary sheet updated successfully with ${dataRows.length} employees`);
