@@ -70,6 +70,8 @@ function onOpen() {
     .addSeparator()
     .addItem('Convert Tenure to Array Formula', 'convertTenureToArrayFormula')
     .addSeparator()
+    .addItem('Build Summary Sheet', 'buildSummarySheet')
+    .addSeparator()
     // Performance Reports Submenu
     .addSubMenu(ui.createMenu('Performance Reports')
       .addItem('🚀 Launch Web Interface', 'launchWebInterface')
@@ -1610,5 +1612,524 @@ function testSheetAccess() {
     Logger.log('Test failed: ' + error.toString());
     return 'Test failed: ' + error.toString();
   }
+}
+
+// ============================================================================
+// SUMMARY SHEET BUILDER
+// ============================================================================
+
+/**
+ * Builds the Summary sheet with all data, slicers, and chart
+ * Replaces all formulas with Apps Script-generated data
+ */
+function buildSummarySheet() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let summarySheet = ss.getSheetByName("Summary");
+    
+    if (!summarySheet) {
+      summarySheet = ss.insertSheet("Summary");
+    } else {
+      summarySheet.clear();
+    }
+    
+    Logger.log("Building Summary sheet...");
+    
+    // Get source data
+    const baseDataSheet = ss.getSheetByName(SHEET_NAMES.BASE_DATA);
+    const fullCompSheet = ss.getSheetByName(SHEET_NAMES.FULL_COMP_HISTORY);
+    const bonusSheet = ss.getSheetByName(SHEET_NAMES.BONUS_HISTORY);
+    const perfReportSheet = ss.getSheetByName(SHEET_NAMES.PERF_REPORT);
+    
+    if (!baseDataSheet) {
+      throw new Error("Base Data sheet not found. Please import Base Data first.");
+    }
+    
+    // Get all source data
+    const baseData = baseDataSheet.getDataRange().getValues();
+    const baseHeaders = baseData[0];
+    const baseDataRows = baseData.slice(1);
+    
+    const fullCompData = fullCompSheet ? fullCompSheet.getDataRange().getValues() : [];
+    const fullCompHeaders = fullCompData.length > 0 ? fullCompData[0] : [];
+    const fullCompRows = fullCompData.slice(1);
+    
+    const bonusData = bonusSheet ? bonusSheet.getDataRange().getValues() : [];
+    const bonusHeaders = bonusData.length > 0 ? bonusData[0] : [];
+    const bonusRows = bonusData.slice(1);
+    
+    const perfReportData = perfReportSheet ? perfReportSheet.getDataRange().getValues() : [];
+    const perfReportHeaders = perfReportData.length > 0 ? perfReportData[0] : [];
+    const perfReportRows = perfReportData.slice(1);
+    
+    // Find column indices in Base Data
+    const baseCols = {
+      empId: findColumnIndex(baseHeaders, ["Emp ID", "Employee ID", "Employee Id"]),
+      empName: findColumnIndex(baseHeaders, ["Emp Name", "Display name", "Display Name", "Name"]),
+      startDate: findColumnIndex(baseHeaders, ["Start Date", "Start date"]),
+      jobTitle: findColumnIndex(baseHeaders, ["Job title", "Job Title"]),
+      jobLevel: findColumnIndex(baseHeaders, ["Job Level", "Job level", "Level"]),
+      manager: findColumnIndex(baseHeaders, ["Manager"]),
+      department: findColumnIndex(baseHeaders, ["Department"]),
+      elt: findColumnIndex(baseHeaders, ["ELT"]),
+      location: findColumnIndex(baseHeaders, ["Location", "Site"]),
+      activeStatus: findColumnIndex(baseHeaders, ["Active/Inactive", "Status"]),
+      baseSalary: findColumnIndex(baseHeaders, ["Base salary", "Base Salary", "Base Pay"]),
+      variableType: findColumnIndex(baseHeaders, ["Variable Type"]),
+      variablePct: findColumnIndex(baseHeaders, ["Variable %"]),
+      noticePeriod: findColumnIndex(baseHeaders, ["Notice Period"])
+    };
+    
+    // Find column indices in Full Comp History
+    const fullCompCols = {
+      empId: findColumnIndex(fullCompHeaders, ["Emp ID", "Employee ID"]),
+      lastPromoDate: findColumnIndex(fullCompHeaders, ["Last Promotion Date"]),
+      lastIncreaseDate: findColumnIndex(fullCompHeaders, ["Last Increase Date"]),
+      lastIncreasePct: findColumnIndex(fullCompHeaders, ["Last Increase %"]),
+      changeReason: findColumnIndex(fullCompHeaders, ["Change Reason"])
+    };
+    
+    // Find column indices in Bonus History
+    const bonusCols = {
+      empId: findColumnIndex(bonusHeaders, ["Emp ID", "Employee ID"]),
+      variableType: findColumnIndex(bonusHeaders, ["Variable Type"]),
+      variablePct: findColumnIndex(bonusHeaders, ["Variable %"])
+    };
+    
+    // Find column indices in Performance Report
+    const perfCols = {
+      empId: findColumnIndex(perfReportHeaders, ["employee id", "employee", "emp id", "emp id (employee)"]),
+      performanceQ23: findColumnIndex(perfReportHeaders, ["How has the employee performed", "Q2&Q3", "performance"]),
+      potentialQ23: findColumnIndex(perfReportHeaders, ["What is this employee's potential", "potential"]),
+      promotionQ1: findColumnIndex(perfReportHeaders, ["Is this employee on track to be promoted", "promotion", "Q1 2026"])
+    };
+    
+    // Build lookup maps
+    const baseDataMap = new Map();
+    baseDataRows.forEach(row => {
+      const empId = normalizeEmpId(safeCell(row, baseCols.empId));
+      if (empId && safeCell(row, baseCols.activeStatus).toLowerCase() === "active") {
+        baseDataMap.set(empId, row);
+      }
+    });
+    
+    const fullCompMap = new Map();
+    fullCompRows.forEach(row => {
+      const empId = normalizeEmpId(safeCell(row, fullCompCols.empId));
+      if (empId) {
+        fullCompMap.set(empId, row);
+      }
+    });
+    
+    const bonusMap = new Map();
+    bonusRows.forEach(row => {
+      const empId = normalizeEmpId(safeCell(row, bonusCols.empId));
+      if (empId) {
+        bonusMap.set(empId, row);
+      }
+    });
+    
+    const perfMap = new Map();
+    perfReportRows.forEach(row => {
+      const empId = normalizeEmpId(safeCell(row, perfCols.empId));
+      if (empId) {
+        perfMap.set(empId, row);
+      }
+    });
+    
+    // Build data table
+    const headerRow = [
+      "Emp ID", "Emp Name", "Start Date", "Tenure", "Job Title", "Level", "Manager", 
+      "Department", "ELT", "Location", "AYR 2024 Rating", "H1 2025", "Q2/Q3 Rating", 
+      "Promotion", "Last Promotion Date", "Last Increase Date", "Last Increase %", 
+      "Change Reason", "Base Salary (Local)", "Base Salary (USD)", "Variable Type", 
+      "Variable %", "Notice Period"
+    ];
+    
+    const dataRows = [];
+    const activeEmpIds = Array.from(baseDataMap.keys());
+    
+    activeEmpIds.forEach(empId => {
+      const baseRow = baseDataMap.get(empId);
+      const fullCompRow = fullCompMap.get(empId);
+      const bonusRow = bonusMap.get(empId);
+      const perfRow = perfMap.get(empId);
+      
+      // Emp ID
+      const empIdVal = empId;
+      
+      // Emp Name
+      const empName = safeCell(baseRow, baseCols.empName);
+      
+      // Start Date
+      const startDateStr = safeCell(baseRow, baseCols.startDate);
+      const startDate = parseDate(startDateStr);
+      
+      // Tenure
+      const tenure = calculateTenure(startDate);
+      
+      // Job Title through Location
+      const jobTitle = safeCell(baseRow, baseCols.jobTitle);
+      const level = safeCell(baseRow, baseCols.jobLevel);
+      const manager = safeCell(baseRow, baseCols.manager);
+      const department = safeCell(baseRow, baseCols.department);
+      const elt = safeCell(baseRow, baseCols.elt);
+      const location = safeCell(baseRow, baseCols.location);
+      
+      // Ratings (from Performance Report)
+      let ayrRating = "";
+      let h1Rating = "";
+      let q23Rating = "";
+      let promotion = "";
+      
+      if (perfRow) {
+        // Extract performance and potential ratings
+        const perfVal = getRatingValue(safeCell(perfRow, perfCols.performanceQ23));
+        const potentialVal = getRatingValue(safeCell(perfRow, perfCols.potentialQ23));
+        q23Rating = mapPerformanceRating(perfVal, potentialVal);
+        
+        // Extract promotion status
+        const promoText = safeCell(perfRow, perfCols.promotionQ1).toLowerCase();
+        if (promoText.includes("ready") || promoText.includes("yes")) {
+          promotion = "Ready";
+        } else if (promoText.includes("uncertain")) {
+          promotion = "Uncertain";
+        } else {
+          promotion = "Not Ready";
+        }
+      }
+      
+      // Last Promotion Date, Last Increase Date, Last Increase %, Change Reason
+      let lastPromoDate = "";
+      let lastIncreaseDate = "";
+      let lastIncreasePct = "";
+      let changeReason = "";
+      
+      if (fullCompRow) {
+        lastPromoDate = safeCell(fullCompRow, fullCompCols.lastPromoDate);
+        lastIncreaseDate = safeCell(fullCompRow, fullCompCols.lastIncreaseDate);
+        lastIncreasePct = safeCell(fullCompRow, fullCompCols.lastIncreasePct);
+        changeReason = safeCell(fullCompRow, fullCompCols.changeReason);
+      }
+      
+      // Base Salary from Base Data
+      const baseSalary = safeCell(baseRow, baseCols.baseSalary);
+      const baseSalaryNum = toNumberSafe(baseSalary);
+      const fxRate = getFXRate(location);
+      const baseSalaryUSD = isFinite(baseSalaryNum) && fxRate ? baseSalaryNum * fxRate : "";
+      
+      // Variable Type and Variable %
+      let variableType = safeCell(baseRow, baseCols.variableType);
+      let variablePct = safeCell(baseRow, baseCols.variablePct);
+      
+      if (bonusRow) {
+        const bonusVarType = safeCell(bonusRow, bonusCols.variableType);
+        const bonusVarPct = safeCell(bonusRow, bonusCols.variablePct);
+        if (bonusVarType) variableType = bonusVarType;
+        if (bonusVarPct) variablePct = bonusVarPct;
+      }
+      
+      // Notice Period
+      const noticePeriod = safeCell(baseRow, baseCols.noticePeriod);
+      
+      dataRows.push([
+        empIdVal, empName, startDate, tenure, jobTitle, level, manager, department, elt, location,
+        ayrRating, h1Rating, q23Rating, promotion, lastPromoDate, lastIncreaseDate, 
+        lastIncreasePct, changeReason, baseSalary, baseSalaryUSD, variableType, variablePct, noticePeriod
+      ]);
+    });
+    
+    // Write data starting at row 20
+    const startRow = 20;
+    const dataRange = summarySheet.getRange(startRow, 1, dataRows.length + 1, headerRow.length);
+    dataRange.setValues([headerRow, ...dataRows]);
+    
+    // Format header row
+    const headerRange = summarySheet.getRange(startRow, 1, 1, headerRow.length);
+    headerRange.setFontWeight("bold");
+    headerRange.setBackground("#9825ff");
+    headerRange.setFontColor("#ffffff");
+    headerRange.setFontFamily("Roboto");
+    headerRange.setFontSize(10);
+    
+    // Format data rows
+    const dataRange2 = summarySheet.getRange(startRow + 1, 1, dataRows.length, headerRow.length);
+    dataRange2.setFontFamily("Roboto");
+    dataRange2.setFontSize(10);
+    
+    // Format specific columns
+    const empIdCol = 1;
+    const startDateCol = 3;
+    const lastPromoDateCol = 15;
+    const lastIncreaseDateCol = 16;
+    const lastIncreasePctCol = 17;
+    const baseSalaryCol = 19;
+    const baseSalaryUSDCol = 20;
+    const variablePctCol = 22;
+    
+    if (dataRows.length > 0) {
+      // Emp ID as text
+      summarySheet.getRange(startRow + 1, empIdCol, dataRows.length, 1).setNumberFormat("@");
+      
+      // Dates
+      summarySheet.getRange(startRow + 1, startDateCol, dataRows.length, 1).setNumberFormat("dd-mmm-yy");
+      if (lastPromoDateCol > 0) {
+        summarySheet.getRange(startRow + 1, lastPromoDateCol, dataRows.length, 1).setNumberFormat("dd-mmm-yy");
+      }
+      if (lastIncreaseDateCol > 0) {
+        summarySheet.getRange(startRow + 1, lastIncreaseDateCol, dataRows.length, 1).setNumberFormat("dd-mmm-yy");
+      }
+      
+      // Percentages
+      if (lastIncreasePctCol > 0) {
+        summarySheet.getRange(startRow + 1, lastIncreasePctCol, dataRows.length, 1).setNumberFormat("0.00");
+      }
+      if (variablePctCol > 0) {
+        summarySheet.getRange(startRow + 1, variablePctCol, dataRows.length, 1).setNumberFormat("0.00");
+      }
+      
+      // Currency
+      if (baseSalaryCol > 0) {
+        summarySheet.getRange(startRow + 1, baseSalaryCol, dataRows.length, 1).setNumberFormat("#,##0");
+      }
+      if (baseSalaryUSDCol > 0) {
+        summarySheet.getRange(startRow + 1, baseSalaryUSDCol, dataRows.length, 1).setNumberFormat("$#,##0.00");
+      }
+    }
+    
+    // Add helper column in column AH (34) for SUBTOTAL
+    const helperCol = 34;
+    const helperFormulas = dataRows.map((_, i) => [`=SUBTOTAL(103,$M${startRow + 1 + i})`]);
+    summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1).setFormulas(helperFormulas);
+    
+    // Create slicers (rows 4-15)
+    createSlicers(summarySheet, dataRows.length, startRow);
+    
+    // Build chart data
+    buildChartData(summarySheet, dataRows, startRow, helperCol);
+    
+    // Apply conditional formatting
+    applyConditionalFormatting(summarySheet, dataRows.length, startRow);
+    
+    // Auto-resize columns
+    summarySheet.autoResizeColumns(1, headerRow.length);
+    
+    // Freeze header row
+    summarySheet.setFrozenRows(startRow);
+    
+    Logger.log(`Summary sheet built successfully with ${dataRows.length} employees`);
+    SpreadsheetApp.getUi().alert("Success", `Summary sheet built successfully with ${dataRows.length} employees`, SpreadsheetApp.getUi().ButtonSet.OK);
+    
+  } catch (error) {
+    Logger.log(`Error building Summary sheet: ${error.message}`);
+    SpreadsheetApp.getUi().alert("Error", `Failed to build Summary sheet: ${error.message}`, SpreadsheetApp.getUi().ButtonSet.OK);
+    throw error;
+  }
+}
+
+/**
+ * Helper function to find column index by header name
+ */
+function findColumnIndex(headers, possibleNames) {
+  if (!headers || headers.length === 0) return -1;
+  const normalizedHeaders = headers.map(h => String(h).toLowerCase().trim());
+  for (const name of possibleNames) {
+    const normalizedName = name.toLowerCase().trim();
+    const index = normalizedHeaders.findIndex(h => h.includes(normalizedName) || normalizedName.includes(h));
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+/**
+ * Normalize employee ID
+ */
+function normalizeEmpId(empId) {
+  if (!empId) return "";
+  const num = toNumberSafe(empId);
+  return isFinite(num) ? String(num) : String(empId).trim();
+}
+
+/**
+ * Parse date string to Date object
+ */
+function parseDate(dateStr) {
+  if (!dateStr) return "";
+  try {
+    return new Date(dateStr);
+  } catch (e) {
+    return "";
+  }
+}
+
+/**
+ * Calculate tenure from start date
+ */
+function calculateTenure(startDate) {
+  if (!startDate || !(startDate instanceof Date)) return "";
+  const today = new Date();
+  const daysDiff = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+  
+  if (daysDiff >= 1460) return "4 Years+";
+  if (daysDiff >= 1095) return "3 Years";
+  if (daysDiff >= 730) return "2 Years";
+  if (daysDiff >= 545) return "1.5 Years";
+  if (daysDiff >= 365) return "1 Year";
+  if (daysDiff >= 180) return "6 Months";
+  return "Less than 6 Months";
+}
+
+/**
+ * Get rating value from text (Exceeds=3, Meets=2, Low=1)
+ */
+function getRatingValue(text) {
+  if (!text) return 0;
+  const lower = text.toLowerCase();
+  if (lower.includes("exceed") || lower === "3") return 3;
+  if (lower.includes("meet") || lower === "2") return 2;
+  if (lower.includes("low") || lower === "1") return 1;
+  return 0;
+}
+
+/**
+ * Map performance and potential to rating (HH, HM, etc.)
+ */
+function mapPerformanceRating(perfVal, potentialVal) {
+  const combined = String(perfVal) + String(potentialVal);
+  const mapping = {
+    "33": "HH",
+    "32": "HM",
+    "31": "HL",
+    "23": "MH",
+    "22": "MM",
+    "21": "ML",
+    "13": "NI",
+    "12": "NI",
+    "11": "NI"
+  };
+  return mapping[combined] || "";
+}
+
+/**
+ * Get FX rate for location
+ */
+function getFXRate(location) {
+  if (!location) return 1;
+  const locationLower = location.toLowerCase();
+  if (locationLower.includes("india")) return 0.0125;
+  if (locationLower.includes("usa") || locationLower.includes("united states")) return 1;
+  if (locationLower.includes("uk") || locationLower.includes("united kingdom")) return 1.37;
+  return 1;
+}
+
+/**
+ * Create slicers on the Summary sheet
+ */
+function createSlicers(sheet, numRows, dataStartRow) {
+  // Slicer configuration: {row, col, sourceRange, title, color}
+  const slicers = [
+    {row: 4, col: 1, range: `A${dataStartRow + 1}:A${dataStartRow + numRows}`, title: "ELT", color: "#9825ff"},
+    {row: 4, col: 2, range: `F${dataStartRow + 1}:F${dataStartRow + numRows}`, title: "Level", color: "#9825ff"},
+    {row: 4, col: 3, range: `D${dataStartRow + 1}:D${dataStartRow + numRows}`, title: "Tenure", color: "#9825ff"},
+    {row: 4, col: 4, range: `H${dataStartRow + 1}:H${dataStartRow + numRows}`, title: "Department", color: "#9825ff"},
+    {row: 4, col: 5, range: `K${dataStartRow + 1}:K${dataStartRow + numRows}`, title: "AYR 2024 Rating", color: "#9825ff"},
+    {row: 4, col: 6, range: `U${dataStartRow + 1}:U${dataStartRow + numRows}`, title: "Variable Type", color: "#9825ff"},
+    {row: 4, col: 7, range: `G${dataStartRow + 1}:G${dataStartRow + numRows}`, title: "Manager", color: "#9825ff"},
+    {row: 4, col: 8, range: `L${dataStartRow + 1}:L${dataStartRow + numRows}`, title: "H1 2025", color: "#9825ff"},
+    {row: 4, col: 9, range: `J${dataStartRow + 1}:J${dataStartRow + numRows}`, title: "Location", color: "#9825ff"},
+    {row: 4, col: 10, range: `M${dataStartRow + 1}:M${dataStartRow + numRows}`, title: "Q2/Q3 Rating", color: "#ff9901"},
+    {row: 4, col: 11, range: `N${dataStartRow + 1}:N${dataStartRow + numRows}`, title: "Promotion", color: "#ff9901"},
+    {row: 4, col: 12, range: `W${dataStartRow + 1}:W${dataStartRow + numRows}`, title: "Notice Period", color: "#ff0100"}
+  ];
+  
+  // Note: Creating slicers programmatically requires the Sheets API
+  // For now, we'll create placeholder cells that can be converted to slicers manually
+  // or use the Sheets API if available
+  slicers.forEach((slicer, idx) => {
+    const cell = sheet.getRange(slicer.row, slicer.col);
+    cell.setValue(`All - ${slicer.title}`);
+    cell.setFontFamily("Roboto");
+    cell.setFontSize(14);
+    cell.setBackground(slicer.color);
+    cell.setFontColor("#ffffff");
+    cell.setFontWeight("bold");
+  });
+}
+
+/**
+ * Build chart data for rating distribution
+ */
+function buildChartData(sheet, dataRows, dataStartRow, helperCol) {
+  // Rating column is M (13), helper column is AH (34)
+  const ratingCol = 13; // Q2/Q3 Rating
+  
+  // Count ratings - will use formulas that reference helper column
+  const ratings = ["HH", "HM", "MH", "MM", "ML", "NI"];
+  
+  // Write chart data with formulas for count and percentage
+  // Chart data starts around row 1, column F (6)
+  const chartStartRow = 1;
+  const chartStartCol = 6; // Column F
+  
+  const chartHeaders = ["Rating", "Count", "%", "Label"];
+  sheet.getRange(chartStartRow, chartStartCol, 1, 4).setValues([chartHeaders]);
+  
+  // Write rating values and formulas
+  ratings.forEach((rating, idx) => {
+    const row = chartStartRow + 1 + idx;
+    const ratingCell = sheet.getRange(row, chartStartCol);
+    ratingCell.setValue(rating);
+    
+    // Count formula using SUMPRODUCT with helper column
+    const countFormula = `=SUMPRODUCT(($M${dataStartRow + 1}:$M${dataStartRow + dataRows.length}="${rating}")*($AH${dataStartRow + 1}:$AH${dataStartRow + dataRows.length}))`;
+    sheet.getRange(row, chartStartCol + 1).setFormula(countFormula);
+    
+    // Percentage formula - count divided by total of all counts
+    const totalCountRow = chartStartRow + 1 + ratings.length;
+    const pctFormula = `=IF(SUM($G${chartStartRow + 2}:$G${totalCountRow})=0, 0, $G${row + 1}/SUM($G${chartStartRow + 2}:$G${totalCountRow}))`;
+    sheet.getRange(row, chartStartCol + 2).setFormula(pctFormula);
+    
+    // Label formula
+    const labelFormula = `=$F${row + 1}&"- "&$G${row + 1}&" | "&TEXT($H${row + 1},"0%")`;
+    sheet.getRange(row, chartStartCol + 3).setFormula(labelFormula);
+  });
+  
+  // Employee count in I17
+  sheet.getRange(17, 9).setFormula(`=COUNTIF(AH${dataStartRow + 1}:AH${dataStartRow + dataRows.length}, 1)`);
+}
+
+/**
+ * Apply conditional formatting to the Summary sheet
+ */
+function applyConditionalFormatting(sheet, numRows, dataStartRow) {
+  const ratingCol = 13; // Q2/Q3 Rating column
+  const promotionCol = 14; // Promotion column
+  
+  // Format HH ratings (green #b7d7a8)
+  const hhRange = sheet.getRange(dataStartRow + 1, ratingCol, numRows, 1);
+  const hhRule = SpreadsheetApp.newConditionalFormatRule()
+    .setRanges([hhRange])
+    .whenTextEqualTo("HH")
+    .setBackground("#b7d7a8")
+    .build();
+  
+  // Format Promotion Ready (blue #92d1ea)
+  const promoReadyRange = sheet.getRange(dataStartRow + 1, promotionCol, numRows, 1);
+  const promoReadyRule = SpreadsheetApp.newConditionalFormatRule()
+    .setRanges([promoReadyRange])
+    .whenTextEqualTo("Ready")
+    .setBackground("#92d1ea")
+    .build();
+  
+  // Format NI ratings (red #f4c7c3)
+  const niRange = sheet.getRange(dataStartRow + 1, ratingCol, numRows, 1);
+  const niRule = SpreadsheetApp.newConditionalFormatRule()
+    .setRanges([niRange])
+    .whenTextEqualTo("NI")
+    .setBackground("#f4c7c3")
+    .build();
+  
+  const rules = [hhRule, promoReadyRule, niRule];
+  sheet.setConditionalFormatRules(rules);
 }
 
