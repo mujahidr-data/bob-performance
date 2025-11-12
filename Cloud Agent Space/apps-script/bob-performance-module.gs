@@ -1674,7 +1674,8 @@ function buildSummarySheet() {
       manager: findColumnIndex(baseHeaders, ["Manager"]),
       department: findColumnIndex(baseHeaders, ["Department"]),
       elt: findColumnIndex(baseHeaders, ["ELT"]),
-      location: findColumnIndex(baseHeaders, ["Location", "Site"]),
+      location: findColumnIndex(baseHeaders, ["Site", "Location"]), // Prefer Site for FX lookup
+      terminationDate: findColumnIndex(baseHeaders, ["Termination date", "Termination Date"])
       activeStatus: findColumnIndex(baseHeaders, ["Active/Inactive", "Status"]),
       baseSalary: findColumnIndex(baseHeaders, ["Base salary", "Base Salary", "Base Pay"]),
       variableType: findColumnIndex(baseHeaders, ["Variable Type"]),
@@ -1705,6 +1706,13 @@ function buildSummarySheet() {
       potentialQ23: findColumnIndex(perfReportHeaders, ["What is this employee's potential", "potential"]),
       promotionQ1: findColumnIndex(perfReportHeaders, ["Is this employee on track to be promoted", "promotion", "Q1 2026"])
     };
+    
+    // Check if promotion is in column T (20) - it's a numeric value (3=Ready, 2=Uncertain, 1=Not Ready)
+    // Column T is index 19 (0-based) or column 20 (1-based)
+    if (perfCols.promotionQ1 < 0 && perfReportHeaders.length > 19) {
+      // Try column T directly (index 19)
+      perfCols.promotionQ1 = 19;
+    }
     
     // Find column indices in Performance Ratings (for AYR and H1)
     const perfRatingsCols = {
@@ -1793,6 +1801,7 @@ function buildSummarySheet() {
       const manager = safeCell(baseRow, baseCols.manager);
       const department = safeCell(baseRow, baseCols.department);
       const elt = safeCell(baseRow, baseCols.elt);
+      // Location - use Site for FX lookup
       const location = safeCell(baseRow, baseCols.location);
       
       // AYR 2024 and H1 2025 from Performance Ratings sheet
@@ -1818,20 +1827,26 @@ function buildSummarySheet() {
           q23Rating = mapPerformanceRating(perfVal, potentialVal);
         }
         
-        // Extract promotion status - check for actual values
-        const promoText = safeCell(perfRow, perfCols.promotionQ1);
-        if (promoText) {
-          const promoLower = promoText.toLowerCase();
-          // Check for "Ready" first (most specific)
-          if (promoLower.includes("ready") && !promoLower.includes("not ready")) {
+        // Extract promotion status - column T has numeric values: 3=Ready, 2=Uncertain, 1=Not Ready
+        const promoValue = safeCell(perfRow, perfCols.promotionQ1);
+        if (promoValue !== null && promoValue !== undefined && promoValue !== "") {
+          const promoNum = toNumberSafe(promoValue);
+          if (promoNum === 3) {
             promotion = "Ready";
-          } else if (promoLower.includes("uncertain")) {
+          } else if (promoNum === 2) {
             promotion = "Uncertain";
-          } else if (promoLower.includes("not ready") || promoLower.includes("no")) {
+          } else if (promoNum === 1) {
             promotion = "Not Ready";
           } else {
-            // Default to Not Ready if unclear
-            promotion = "Not Ready";
+            // Fallback: try text parsing if not numeric
+            const promoText = String(promoValue).toLowerCase();
+            if (promoText.includes("ready") && !promoText.includes("not ready")) {
+              promotion = "Ready";
+            } else if (promoText.includes("uncertain")) {
+              promotion = "Uncertain";
+            } else {
+              promotion = "Not Ready";
+            }
           }
         } else {
           promotion = "Not Ready";
@@ -1877,9 +1892,8 @@ function buildSummarySheet() {
         variablePct = safeCell(baseRow, baseCols.variablePct);
       }
       
-      // Notice Period - use XLOOKUP formula to get from Base Data column R
-      // Formula: =XLOOKUP(A{row},'Base Data'!B:B,'Base Data'!R:R,"")
-      // We'll set this as a formula later, not a value
+      // Notice Period - if active employee has termination date, they're on notice
+      // We'll set this as a formula later: check if termination date exists for active employee
       const noticePeriod = ""; // Will be set as formula
       
       dataRows.push([
@@ -2024,9 +2038,17 @@ function buildSummarySheet() {
     const helperCol = 34;
     if (dataRows.length > 0) {
       const helperFormulas = dataRows.map((_, i) => [`=SUBTOTAL(103,$A${startRow + 1 + i})`]);
-      summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1).setFormulas(helperFormulas);
+      const helperRange = summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1);
+      helperRange.setFormulas(helperFormulas);
       
-      // Update chart data formulas with dynamic ranges
+      // Copy formatting from 2nd cell in helper column (row startRow + 1, which is row 21)
+      if (startRow + 1 <= summarySheet.getLastRow()) {
+        const sourceCell = summarySheet.getRange(startRow + 1, helperCol);
+        const format = sourceCell.getNumberFormat();
+        helperRange.setNumberFormat(format);
+      }
+      
+      // Update chart data formulas with original references
       updateChartDataFormulas(summarySheet, dataRows.length, startRow, helperCol);
     }
     
@@ -2267,7 +2289,7 @@ function createSlicerPlaceholders(sheet, slicers) {
 }
 
 /**
- * Update chart data formulas with dynamic ranges
+ * Update chart data formulas with original references
  */
 function updateChartDataFormulas(sheet, numDataRows, dataStartRow, helperCol) {
   // Rating column is M (13), helper column is AH (34)
@@ -2283,13 +2305,13 @@ function updateChartDataFormulas(sheet, numDataRows, dataStartRow, helperCol) {
   // Calculate the last data row
   const lastDataRow = dataStartRow + numDataRows;
   
-  // Update count formulas for each rating
+  // Update count formulas for each rating - use original fixed references
   ratings.forEach((rating, idx) => {
-    const row = chartStartRow + 1 + idx;
+    const row = chartStartRow + 1 + idx; // Row 2, 3, 4, 5, 6, 7
     
-    // Count formula using SUMPRODUCT with dynamic ranges
-    // Formula: =SUMPRODUCT(($AH$21:$AH$390=1)*($M$21:$M$390=H2))
-    // But with dynamic ranges based on actual data
+    // Count formula using SUMPRODUCT with fixed ranges (will be updated to match data)
+    // Original: =SUMPRODUCT(($AH$21:$AH$390=1)*($M$21:$M$390=H2))
+    // Use dynamic last row but keep the structure
     const countFormula = `=SUMPRODUCT(($AH$${dataStartRow + 1}:$AH$${lastDataRow}=1)*($M$${dataStartRow + 1}:$M$${lastDataRow}=$F${row + 1}))`;
     sheet.getRange(row, chartStartCol + 1).setFormula(countFormula);
     
@@ -2298,12 +2320,12 @@ function updateChartDataFormulas(sheet, numDataRows, dataStartRow, helperCol) {
     const pctFormula = `=IF(SUM($G${chartStartRow + 2}:$G${totalCountRow})=0, 0, $G${row + 1}/SUM($G${chartStartRow + 2}:$G${totalCountRow}))`;
     sheet.getRange(row, chartStartCol + 2).setFormula(pctFormula);
     
-    // Label formula
+    // Label formula - use original reference format: =$F3&"- "&$G3&" | "&TEXT($H3,"0%")
     const labelFormula = `=$F${row + 1}&"- "&$G${row + 1}&" | "&TEXT($H${row + 1},"0%")`;
     sheet.getRange(row, chartStartCol + 3).setFormula(labelFormula);
   });
   
-  // Employee count in I17
+  // Employee count in I17 - use dynamic range
   sheet.getRange(17, 9).setFormula(`=COUNTIF(AH$${dataStartRow + 1}:AH$${lastDataRow}, 1)`);
 }
 
