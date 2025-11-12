@@ -68,8 +68,6 @@ function onOpen() {
     .addSeparator()
     .addItem('Import All Data', 'importAllBobData')
     .addSeparator()
-    .addItem('Convert Tenure to Array Formula', 'convertTenureToArrayFormula')
-    .addSeparator()
     .addItem('Build Summary Sheet', 'buildSummarySheet')
     .addSeparator()
     // Performance Reports Submenu
@@ -2236,11 +2234,11 @@ function createRatingDistributionChart(sheet, chartStartRow, chartStartCol, numR
               endColumnIndex: chartStartCol + 1
             }
           }]
-          }
-        },
-        targetAxis: "LEFT_AXIS",
-        type: "COLUMN"
-      }];
+        }
+      },
+      targetAxis: "LEFT_AXIS",
+      type: "COLUMN"
+    }];
     
     // Chart position - overlay on the data area (rows 1-15, columns F-T)
     const chartPosition = {
