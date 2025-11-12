@@ -2601,10 +2601,22 @@ function updateSlicerRanges(sheet, numRows, dataStartRow) {
       throw new Error("Sheets API is not enabled. Please enable it in Extensions > Apps Script > Services");
     }
     
-    // Get all slicers in the spreadsheet
+    // Get all slicers in the spreadsheet - they're nested in each sheet
     Logger.log("Fetching slicers from spreadsheet...");
-    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-    const slicers = spreadsheet.slicers || [];
+    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId, {
+      fields: "sheets(properties(sheetId,title),slicers)"
+    });
+    
+    // Collect all slicers from all sheets
+    let slicers = [];
+    if (spreadsheet.sheets) {
+      spreadsheet.sheets.forEach(sheetData => {
+        if (sheetData.slicers && sheetData.slicers.length > 0) {
+          Logger.log(`Found ${sheetData.slicers.length} slicers on sheet: ${sheetData.properties.title} (ID: ${sheetData.properties.sheetId})`);
+          slicers = slicers.concat(sheetData.slicers);
+        }
+      });
+    }
     
     Logger.log(`Found ${slicers.length} total slicers in spreadsheet`);
     
