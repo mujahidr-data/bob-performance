@@ -1622,26 +1622,14 @@ function testSheetAccess() {
  */
 function buildSummarySheet() {
   try {
-    // Check if Sheets API is available
-    try {
-      if (typeof Sheets === 'undefined') {
-        Logger.log("Warning: Sheets API not enabled. Slicers and charts will use fallback methods.");
-        Logger.log("To enable: Resources > Advanced Google services > Enable Google Sheets API");
-      }
-    } catch (e) {
-      Logger.log("Sheets API check failed: " + e.message);
-    }
-    
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let summarySheet = ss.getSheetByName("Summary");
+    const summarySheet = ss.getSheetByName("Summary");
     
     if (!summarySheet) {
-      summarySheet = ss.insertSheet("Summary");
-    } else {
-      summarySheet.clear();
+      throw new Error("Summary sheet not found. Please create it first.");
     }
     
-    Logger.log("Building Summary sheet...");
+    Logger.log("Updating Summary sheet...");
     
     // Get source data
     const baseDataSheet = ss.getSheetByName(SHEET_NAMES.BASE_DATA);
@@ -1889,11 +1877,10 @@ function buildSummarySheet() {
         variablePct = safeCell(baseRow, baseCols.variablePct);
       }
       
-      // Notice Period from Base Data
-      let noticePeriod = "";
-      if (baseCols.noticePeriod >= 0) {
-        noticePeriod = safeCell(baseRow, baseCols.noticePeriod);
-      }
+      // Notice Period - use XLOOKUP formula to get from Base Data column R
+      // Formula: =XLOOKUP(A{row},'Base Data'!B:B,'Base Data'!R:R,"")
+      // We'll set this as a formula later, not a value
+      const noticePeriod = ""; // Will be set as formula
       
       dataRows.push([
         empIdVal, empName, startDate, tenure, jobTitle, level, manager, department, elt, location,
