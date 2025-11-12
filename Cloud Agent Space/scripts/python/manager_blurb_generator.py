@@ -65,6 +65,7 @@ class ManagerBlurbGenerator:
         
         self.service = self._authenticate()
         self.summarizer = None
+        self.semantic_validator = None
         
     def _load_config(self, config_path: str) -> Dict:
         """Load configuration from JSON file"""
@@ -132,6 +133,34 @@ class ManagerBlurbGenerator:
                 except Exception as e2:
                     print(f"❌ Failed to load any model: {e2}")
                     sys.exit(1)
+    
+    def _init_semantic_validator(self):
+        """Initialize semantic validation model (lazy loading)"""
+        if self.semantic_validator is None:
+            print("🔍 Loading semantic validation model...")
+            print("   (This will verify blurbs are coherent performance reviews)")
+            
+            try:
+                # Use zero-shot classification for semantic validation
+                self.semantic_validator = pipeline(
+                    "zero-shot-classification",
+                    model="facebook/bart-large-mnli",
+                    device=0 if torch.cuda.is_available() else -1
+                )
+                print("   ✓ Loaded BART-MNLI validator")
+            except Exception as e:
+                print(f"   ⚠️  Failed to load BART-MNLI, trying DistilBART: {e}")
+                try:
+                    self.semantic_validator = pipeline(
+                        "zero-shot-classification",
+                        model="typeform/distilbert-base-uncased-mnli",
+                        device=-1
+                    )
+                    print("   ✓ Loaded DistilBERT-MNLI validator")
+                except Exception as e2:
+                    print(f"   ⚠️  Semantic validation unavailable: {e2}")
+                    print("   ℹ️  Continuing with rule-based QA only")
+                    self.semantic_validator = None
     
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text"""
@@ -218,32 +247,51 @@ class ManagerBlurbGenerator:
             if len(words) > 60:
                 blurb = ' '.join(words[:60]) + '.'
             
-            # QA validation pass
-            is_valid, reason = self._validate_blurb_quality(blurb, emp_name)
+            # QA validation pass (rule-based)
+            is_valid_rules, reason = self._validate_blurb_quality(blurb, emp_name)
             
-            if is_valid:
-                return blurb
-            else:
-                # Failed QA - try fallback
-                print(f"       ⚠️  QA failed ({reason}), using fallback extraction")
+            if not is_valid_rules:
+                # Failed rule-based QA - try fallback
+                print(f"       ⚠️  Rule-based QA failed ({reason}), using fallback")
                 fallback = self._simple_extract(feedback_text)
                 
-                # Validate fallback too
+                # Validate fallback with rules
                 is_valid_fallback, _ = self._validate_blurb_quality(fallback, emp_name)
                 if is_valid_fallback:
-                    return fallback
+                    blurb = fallback
                 else:
                     # Both failed - return generic message
                     return "Performance feedback available; requires manual review for summary"
+            
+            # Semantic validation pass (AI-based)
+            is_valid_semantic, semantic_reason, confidence = self._validate_semantic_coherence(blurb, emp_name)
+            
+            if not is_valid_semantic:
+                print(f"       ⚠️  Semantic QA failed ({semantic_reason}), using fallback")
+                fallback = self._simple_extract(feedback_text)
+                
+                # Validate fallback semantically
+                is_valid_fallback_semantic, _, _ = self._validate_semantic_coherence(fallback, emp_name)
+                is_valid_fallback_rules, _ = self._validate_blurb_quality(fallback, emp_name)
+                
+                if is_valid_fallback_semantic and is_valid_fallback_rules:
+                    return fallback
+                else:
+                    return "Performance feedback available; requires manual review for summary"
+            
+            # Both validations passed
+            return blurb
             
         except Exception as e:
             print(f"       ⚠️  Summarization failed for {emp_name}: {e}")
             # Fallback: simple extraction
             fallback = self._simple_extract(feedback_text)
             
-            # Validate fallback
-            is_valid, _ = self._validate_blurb_quality(fallback, emp_name)
-            if is_valid:
+            # Validate fallback (both rules and semantic)
+            is_valid_rules, _ = self._validate_blurb_quality(fallback, emp_name)
+            is_valid_semantic, _, _ = self._validate_semantic_coherence(fallback, emp_name)
+            
+            if is_valid_rules and is_valid_semantic:
                 return fallback
             else:
                 return "Performance feedback available; requires manual review for summary"
@@ -351,6 +399,60 @@ class ManagerBlurbGenerator:
                 return False, f"Potential gibberish detected: {word}"
         
         return True, "Valid"
+    
+    def _validate_semantic_coherence(self, blurb: str, emp_name: str = "") -> tuple[bool, str, float]:
+        """
+        Semantic validation using zero-shot classification
+        Returns: (is_valid, reason, confidence_score)
+        """
+        
+        # Initialize semantic validator if needed
+        self._init_semantic_validator()
+        
+        # If validator not available, skip semantic check
+        if self.semantic_validator is None:
+            return True, "Semantic validation skipped", 1.0
+        
+        try:
+            # Define candidate labels for zero-shot classification
+            candidate_labels = [
+                "employee performance review",
+                "professional development feedback",
+                "random unrelated text",
+                "gibberish or nonsense",
+                "news article or website content"
+            ]
+            
+            # Run zero-shot classification
+            result = self.semantic_validator(
+                blurb,
+                candidate_labels,
+                multi_label=False
+            )
+            
+            # Get top prediction
+            top_label = result['labels'][0]
+            top_score = result['scores'][0]
+            
+            # Check if top prediction is performance-related
+            performance_labels = [
+                "employee performance review",
+                "professional development feedback"
+            ]
+            
+            if top_label in performance_labels:
+                if top_score >= 0.5:  # High confidence it's a performance review
+                    return True, f"Semantic: {top_label}", top_score
+                else:
+                    return False, f"Low confidence ({top_score:.2f}) for performance review", top_score
+            else:
+                # Top prediction is NOT performance-related
+                return False, f"Semantic: Detected as '{top_label}' ({top_score:.2f})", top_score
+        
+        except Exception as e:
+            # If semantic validation fails, don't block the blurb
+            print(f"       ⚠️  Semantic validation error: {e}")
+            return True, "Semantic validation error (skipped)", 0.0
     
     def _simple_extract(self, text: str) -> str:
         """Simple fallback extraction if AI fails - with quality checks"""
