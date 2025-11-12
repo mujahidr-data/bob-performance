@@ -71,6 +71,7 @@ function onOpen() {
     .addItem('🔄 Update Slicers Only', 'updateSlicersOnly')
     .addItem('🤖 Generate Manager Blurbs', 'generateManagerBlurbs')
     .addItem('🎯 Create AI Readiness Mapping', 'createAIReadinessMapping')
+    .addItem('✅ Add AI Assessment Column', 'addAIAssessmentColumn')
     .addSeparator()
     .addItem('🌐 Launch Web Interface', 'launchWebInterface')
     .addItem('❓ Instructions & Help', 'showInstructions')
@@ -932,40 +933,40 @@ function createAIReadinessMapping() {
     // Create new mapping sheet
     mappingSheet = ss.insertSheet("AI Readiness Mapping");
     
-    // Define function-to-category mapping
+    // Define function-to-category mapping with descriptions
     const mappingData = [
-      ["Department/Function", "AI Readiness Category"],
-      ["Engineering", "AI-Accelerated Developer"],
-      ["Product", "AI-Forward Solutions Engineer"],
-      ["Customer Success", "AI Outcome Manager"],
-      ["Marketing", "AI Content Intelligence Strategist"],
-      ["Sales", "AI-Augmented Revenue Accelerator"],
-      ["Human Resources", "AI-Powered People Strategist"],
-      ["People Ops", "AI-Powered People Strategist"],
-      ["HR", "AI-Powered People Strategist"],
-      ["Finance", "AI-Driven Financial Intelligence Analyst"],
-      ["General & Administrative", "AI Operations Optimizer"],
-      ["G&A", "AI Operations Optimizer"],
-      ["Operations", "AI Operations Optimizer"],
-      ["Support", "AI-Enhanced Support Specialist"],
-      ["Service Delivery", "AI-Enhanced Support Specialist"],
-      ["Data", "AI-Native Insights Engineer"],
-      ["Analytics", "AI-Native Insights Engineer"],
-      ["Data & Analytics", "AI-Native Insights Engineer"],
-      ["Design", "AI-Augmented Experience Designer"],
-      ["UX", "AI-Augmented Experience Designer"],
-      ["Information Security", "AI-Powered Security Guardian"],
-      ["Security", "AI-Powered Security Guardian"],
-      ["Legal", "AI-Assisted Legal Intelligence Analyst"],
-      ["Compliance", "AI-Assisted Legal Intelligence Analyst"]
+      ["Department/Function", "AI Readiness Category", "Description"],
+      ["Engineering", "AI-Accelerated Developer", "Leverages AI for 2x velocity in code generation, automated pipelines, and AI-driven code review"],
+      ["Product", "AI-Forward Solutions Engineer", "Uses AI for rapid prototyping, competitive intelligence, and client requirement synthesis"],
+      ["Customer Success", "AI Outcome Manager", "Manages 2x portfolio with AI agents, churn prediction, and proactive automation"],
+      ["Marketing", "AI Content Intelligence Strategist", "Generates data-driven content using AI, competitive synthesis, and personalized campaigns"],
+      ["Sales", "AI-Augmented Revenue Accelerator", "Uses AI for lead scoring, personalized outreach, and deal intelligence"],
+      ["Human Resources", "AI-Powered People Strategist", "Leverages AI for resume screening, sentiment analysis, and retention prediction"],
+      ["People Ops", "AI-Powered People Strategist", "Leverages AI for resume screening, sentiment analysis, and retention prediction"],
+      ["HR", "AI-Powered People Strategist", "Leverages AI for resume screening, sentiment analysis, and retention prediction"],
+      ["Finance", "AI-Driven Financial Intelligence Analyst", "Uses AI for automated forecasting, anomaly detection, and scenario modeling"],
+      ["General & Administrative", "AI Operations Optimizer", "Leverages AI for document intelligence, workflow automation, and compliance monitoring"],
+      ["G&A", "AI Operations Optimizer", "Leverages AI for document intelligence, workflow automation, and compliance monitoring"],
+      ["Operations", "AI Operations Optimizer", "Leverages AI for document intelligence, workflow automation, and compliance monitoring"],
+      ["Support", "AI-Enhanced Support Specialist", "Uses AI for ticket triage, L1 automation, and 2x support capacity"],
+      ["Service Delivery", "AI-Enhanced Support Specialist", "Uses AI for ticket triage, L1 automation, and 2x support capacity"],
+      ["Data", "AI-Native Insights Engineer", "Builds natural language queries, automated pipelines, and predictive models at scale"],
+      ["Analytics", "AI-Native Insights Engineer", "Builds natural language queries, automated pipelines, and predictive models at scale"],
+      ["Data & Analytics", "AI-Native Insights Engineer", "Builds natural language queries, automated pipelines, and predictive models at scale"],
+      ["Design", "AI-Augmented Experience Designer", "Uses AI for rapid prototyping, personalized experiences, and design variation generation"],
+      ["UX", "AI-Augmented Experience Designer", "Uses AI for rapid prototyping, personalized experiences, and design variation generation"],
+      ["Information Security", "AI-Powered Security Guardian", "Uses AI for real-time threat detection, automated response, and vulnerability prediction"],
+      ["Security", "AI-Powered Security Guardian", "Uses AI for real-time threat detection, automated response, and vulnerability prediction"],
+      ["Legal", "AI-Assisted Legal Intelligence Analyst", "Leverages AI for contract review, legal research, and risk assessment"],
+      ["Compliance", "AI-Assisted Legal Intelligence Analyst", "Leverages AI for contract review, legal research, and risk assessment"]
     ];
     
     // Write mapping data
-    const mappingRange = mappingSheet.getRange(1, 1, mappingData.length, 2);
+    const mappingRange = mappingSheet.getRange(1, 1, mappingData.length, 3);
     mappingRange.setValues(mappingData);
     
     // Format header
-    const headerRange = mappingSheet.getRange(1, 1, 1, 2);
+    const headerRange = mappingSheet.getRange(1, 1, 1, 3);
     headerRange.setFontWeight("bold");
     headerRange.setBackground("#9825ff");
     headerRange.setFontColor("#ffffff");
@@ -973,9 +974,13 @@ function createAIReadinessMapping() {
     headerRange.setFontSize(11);
     
     // Format data rows
-    const dataRange = mappingSheet.getRange(2, 1, mappingData.length - 1, 2);
+    const dataRange = mappingSheet.getRange(2, 1, mappingData.length - 1, 3);
     dataRange.setFontFamily("Roboto");
     dataRange.setFontSize(10);
+    
+    // Wrap text in description column
+    const descriptionRange = mappingSheet.getRange(2, 3, mappingData.length - 1, 1);
+    descriptionRange.setWrap(true);
     
     // Alternate row colors for readability
     for (let i = 2; i <= mappingData.length; i++) {
@@ -985,58 +990,59 @@ function createAIReadinessMapping() {
       }
     }
     
-    // Auto-resize columns
-    mappingSheet.autoResizeColumns(1, 2);
+    // Set column widths
+    mappingSheet.setColumnWidth(1, 250);
+    mappingSheet.setColumnWidth(2, 350);
+    mappingSheet.setColumnWidth(3, 500);
     
     // Freeze header row
     mappingSheet.setFrozenRows(1);
     
-    // Add instructions in column D
+    // Add instructions in column E
     const instructions = [
       ["Instructions"],
-      ["This sheet maps each Department/Function to its AI Readiness Category."],
+      ["This sheet maps each Department/Function to its AI Readiness Category with descriptions."],
       [""],
-      ["The Summary sheet's 'AI Readiness Category' column uses VLOOKUP to auto-populate based on employee department."],
+      ["The Summary sheet's 'AI Readiness Category' column auto-populates based on employee department."],
       [""],
       ["To assess employees:"],
-      ["1. Review the AI Readiness Categories documentation (see docs/AI_READINESS_CATEGORIES.md)"],
-      ["2. Add a 'AI Readiness Assessment' column to Summary sheet"],
-      ["3. Use data validation with these options: 'AI-Ready', 'AI-Capable', 'Not AI-Ready'"],
-      ["4. Leadership evaluates each employee against their function's criteria"],
+      ["1. Run 'Add AI Assessment Column' from the menu (one-time setup)"],
+      ["2. Review the AI Readiness Categories documentation (see docs/AI_READINESS_CATEGORIES.md)"],
+      ["3. Leadership evaluates each employee against their function's 5 criteria"],
+      ["4. Select assessment level from dropdown in Summary sheet"],
       [""],
-      ["Category Descriptions:"],
-      ["• AI-Ready: Demonstrates 3+ criteria, measurable impact, proactive adoption"],
-      ["• AI-Capable: Demonstrates 2 criteria, uses AI but limited impact, needs coaching"],
-      ["• Not AI-Ready: 0-1 criteria, resistant to AI, manual-first approach"],
+      ["Assessment Levels:"],
+      ["• AI-Ready: Demonstrates 3+ of 5 criteria, measurable impact, proactive adoption"],
+      ["• AI-Capable: Demonstrates 2 of 5 criteria, uses AI but limited impact, needs coaching"],
+      ["• Not AI-Ready: 0-1 of 5 criteria, resistant to AI, manual-first approach"],
+      ["• Not Assessed: Not yet evaluated"],
       [""],
       ["📖 Full criteria available in: docs/AI_READINESS_CATEGORIES.md"]
     ];
     
-    const instructionsRange = mappingSheet.getRange(1, 4, instructions.length, 1);
+    const instructionsRange = mappingSheet.getRange(1, 5, instructions.length, 1);
     instructionsRange.setValues(instructions);
     instructionsRange.setFontFamily("Roboto");
     instructionsRange.setFontSize(9);
     instructionsRange.setWrap(true);
     
     // Format instructions header
-    const instructionsHeader = mappingSheet.getRange(1, 4, 1, 1);
+    const instructionsHeader = mappingSheet.getRange(1, 5, 1, 1);
     instructionsHeader.setFontWeight("bold");
     instructionsHeader.setBackground("#ff9901");
     instructionsHeader.setFontColor("#ffffff");
     instructionsHeader.setFontSize(10);
     
-    // Set column widths
-    mappingSheet.setColumnWidth(1, 250);
-    mappingSheet.setColumnWidth(2, 350);
-    mappingSheet.setColumnWidth(4, 600);
+    // Set instruction column width
+    mappingSheet.setColumnWidth(5, 600);
     
     ui.alert(
       "Success",
       "AI Readiness Mapping sheet created successfully!\n\n" +
       "Next steps:\n" +
-      "1. Review/customize department mappings if needed\n" +
+      "1. Review/customize department mappings and descriptions if needed\n" +
       "2. Run 'Build Summary Sheet' to populate the AI Readiness Category column\n" +
-      "3. Add an 'AI Readiness Assessment' column for leadership evaluation\n\n" +
+      "3. Run 'Add AI Assessment Column' to add validation dropdown for leadership\n\n" +
       "📖 Full category criteria: docs/AI_READINESS_CATEGORIES.md",
       ui.ButtonSet.OK
     );
@@ -1048,6 +1054,163 @@ function createAIReadinessMapping() {
     SpreadsheetApp.getUi().alert(
       "Error",
       `Failed to create AI Readiness Mapping sheet: ${error.message}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    throw error;
+  }
+}
+
+/**
+ * Add AI Readiness Assessment column to Summary sheet
+ * with data validation dropdown for leadership evaluation
+ */
+function addAIAssessmentColumn() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const summarySheet = ss.getSheetByName("Summary");
+    const ui = SpreadsheetApp.getUi();
+    
+    if (!summarySheet) {
+      ui.alert(
+        "Error",
+        "Summary sheet not found. Please run 'Build Summary Sheet' first.",
+        ui.ButtonSet.OK
+      );
+      return;
+    }
+    
+    // Find the last column with data (should be AI Readiness Category, column 25/Y)
+    const lastCol = summarySheet.getLastColumn();
+    const headerRow = 20; // Header is in row 20
+    const lastRow = summarySheet.getLastRow();
+    
+    // Check if AI Assessment column already exists
+    const existingHeaders = summarySheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+    if (existingHeaders.includes("AI Readiness Assessment")) {
+      const response = ui.alert(
+        "Column Exists",
+        "AI Readiness Assessment column already exists. Do you want to reapply the data validation?",
+        ui.ButtonSet.YES_NO
+      );
+      
+      if (response !== ui.Button.YES) {
+        return;
+      }
+      
+      // Find the existing column
+      const assessmentCol = existingHeaders.indexOf("AI Readiness Assessment") + 1;
+      
+      // Reapply validation
+      const dataRange = summarySheet.getRange(headerRow + 1, assessmentCol, lastRow - headerRow, 1);
+      const validationRule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['AI-Ready', 'AI-Capable', 'Not AI-Ready', 'Not Assessed'], true)
+        .setAllowInvalid(false)
+        .setHelpText('Select the AI readiness level based on the employee\'s demonstrated capabilities')
+        .build();
+      
+      dataRange.setDataValidation(validationRule);
+      
+      ui.alert(
+        "Success",
+        "Data validation reapplied to AI Readiness Assessment column!",
+        ui.ButtonSet.OK
+      );
+      
+      Logger.log("Data validation reapplied to existing AI Assessment column");
+      return;
+    }
+    
+    // Add new column after AI Readiness Category (column 26/Z)
+    const assessmentCol = lastCol + 1;
+    
+    Logger.log(`Adding AI Readiness Assessment column at column ${assessmentCol}`);
+    
+    // Add header
+    const headerCell = summarySheet.getRange(headerRow, assessmentCol);
+    headerCell.setValue("AI Readiness Assessment");
+    headerCell.setFontWeight("bold");
+    headerCell.setBackground("#9825ff");
+    headerCell.setFontColor("#ffffff");
+    headerCell.setFontFamily("Roboto");
+    headerCell.setFontSize(10);
+    
+    // Set default value for all data rows
+    if (lastRow > headerRow) {
+      const dataRange = summarySheet.getRange(headerRow + 1, assessmentCol, lastRow - headerRow, 1);
+      
+      // Set default value
+      const defaultValues = Array(lastRow - headerRow).fill(["Not Assessed"]);
+      dataRange.setValues(defaultValues);
+      
+      // Apply data validation
+      const validationRule = SpreadsheetApp.newDataValidation()
+        .requireValueInList(['AI-Ready', 'AI-Capable', 'Not AI-Ready', 'Not Assessed'], true)
+        .setAllowInvalid(false)
+        .setHelpText('Select the AI readiness level based on the employee\'s demonstrated capabilities')
+        .build();
+      
+      dataRange.setDataValidation(validationRule);
+      
+      // Apply formatting
+      dataRange.setFontFamily("Roboto");
+      dataRange.setFontSize(10);
+      dataRange.setHorizontalAlignment("center");
+    }
+    
+    // Apply conditional formatting
+    const conditionalFormatRules = summarySheet.getConditionalFormatRules();
+    
+    // AI-Ready: Green
+    const aiReadyRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo('AI-Ready')
+      .setBackground('#b7d7a8')
+      .setRanges([summarySheet.getRange(headerRow + 1, assessmentCol, lastRow - headerRow, 1)])
+      .build();
+    
+    // AI-Capable: Amber
+    const aiCapableRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo('AI-Capable')
+      .setBackground('#fff2cc')
+      .setRanges([summarySheet.getRange(headerRow + 1, assessmentCol, lastRow - headerRow, 1)])
+      .build();
+    
+    // Not AI-Ready: Red
+    const notReadyRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo('Not AI-Ready')
+      .setBackground('#f4c7c3')
+      .setRanges([summarySheet.getRange(headerRow + 1, assessmentCol, lastRow - headerRow, 1)])
+      .build();
+    
+    // Not Assessed: Grey
+    const notAssessedRule = SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo('Not Assessed')
+      .setBackground('#efefef')
+      .setRanges([summarySheet.getRange(headerRow + 1, assessmentCol, lastRow - headerRow, 1)])
+      .build();
+    
+    conditionalFormatRules.push(aiReadyRule, aiCapableRule, notReadyRule, notAssessedRule);
+    summarySheet.setConditionalFormatRules(conditionalFormatRules);
+    
+    ui.alert(
+      "Success",
+      `AI Readiness Assessment column added successfully!\n\n` +
+      `Column: ${String.fromCharCode(64 + assessmentCol)} (after AI Readiness Category)\n\n` +
+      `Dropdown options:\n` +
+      `• AI-Ready (Green)\n` +
+      `• AI-Capable (Amber)\n` +
+      `• Not AI-Ready (Red)\n` +
+      `• Not Assessed (Grey)\n\n` +
+      `Leadership can now evaluate each employee using the dropdown.`,
+      ui.ButtonSet.OK
+    );
+    
+    Logger.log(`AI Readiness Assessment column added at column ${assessmentCol}`);
+    
+  } catch (error) {
+    Logger.log(`Error adding AI Assessment column: ${error.message}`);
+    SpreadsheetApp.getUi().alert(
+      "Error",
+      `Failed to add AI Assessment column: ${error.message}`,
       SpreadsheetApp.getUi().ButtonSet.OK
     );
     throw error;
