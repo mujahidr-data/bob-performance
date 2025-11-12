@@ -837,6 +837,71 @@ function generateManagerBlurbs() {
 }
 
 /**
+ * Update Slicers Only
+ * 
+ * Updates slicer data ranges to match current Summary sheet row count
+ * without rebuilding the entire sheet. Safe to run - preserves all data,
+ * formatting, and existing slicer filters.
+ */
+function updateSlicersOnly() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const summarySheet = ss.getSheetByName("Summary");
+    
+    if (!summarySheet) {
+      SpreadsheetApp.getUi().alert(
+        "Error",
+        "Summary sheet not found. Please create it first by running 'Build Summary Sheet'.",
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+      return;
+    }
+    
+    // Get the current number of data rows
+    // Assuming header is in row 20, data starts in row 21
+    const lastRow = summarySheet.getLastRow();
+    const dataStartRow = 20;
+    
+    if (lastRow <= dataStartRow) {
+      SpreadsheetApp.getUi().alert(
+        "Error",
+        "No data found in Summary sheet. Please run 'Build Summary Sheet' first.",
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+      return;
+    }
+    
+    const numDataRows = lastRow - dataStartRow;
+    
+    Logger.log(`Updating slicers for ${numDataRows} data rows (rows ${dataStartRow + 1} to ${lastRow})`);
+    
+    // Update slicer ranges
+    updateSlicerRanges(summarySheet, numDataRows, dataStartRow - 1);
+    
+    SpreadsheetApp.getUi().alert(
+      "Success",
+      `Slicer ranges updated successfully!\n\n` +
+      `Data rows: ${numDataRows}\n` +
+      `Range: Row ${dataStartRow + 1} to ${lastRow}\n\n` +
+      `All slicer filters and formatting preserved.`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    
+    Logger.log(`✓ Slicers updated successfully for ${numDataRows} rows`);
+    
+  } catch (error) {
+    Logger.log(`Error updating slicers: ${error.message}`);
+    SpreadsheetApp.getUi().alert(
+      "Error",
+      `Failed to update slicers: ${error.message}\n\n` +
+      `Check that the Summary sheet exists and has data.`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    throw error;
+  }
+}
+
+/**
  * Create AI Readiness Mapping Sheet
  * 
  * Creates a reference sheet with Department → AI Readiness Category mapping
