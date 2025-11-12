@@ -1908,13 +1908,24 @@ function buildSummarySheet() {
     const dataRange = summarySheet.getRange(startRow, 1, dataRows.length + 1, headerRow.length);
     dataRange.setValues([headerRow, ...dataRows]);
     
-    // Set Notice Period formulas (column 23) - if active employee has termination date, they're on notice
-    // Formula: =IF(XLOOKUP($A{row},'Base Data'!B:B,'Base Data'!Q:Q,"")<>"", XLOOKUP($A${startRow + 1 + i},'Base Data'!B:B,'Base Data'!Q:Q,""), "")
-    // Column Q is Termination date
+    // Set Notice Period values (column 23) - return termination date from Base Data
     if (dataRows.length > 0) {
       const noticePeriodCol = 23;
-      const noticePeriodFormulas = dataRows.map((_, i) => [`=IF(XLOOKUP($A${startRow + 1 + i},'Base Data'!B:B,'Base Data'!Q:Q,"")<>"", XLOOKUP($A${startRow + 1 + i},'Base Data'!B:B,'Base Data'!Q:Q,""), "")`]);
-      summarySheet.getRange(startRow + 1, noticePeriodCol, dataRows.length, 1).setFormulas(noticePeriodFormulas);
+      const noticePeriodValues = dataRows.map((_, i) => {
+        const empId = dataRows[i][0]; // Emp ID is first column
+        const baseRow = baseDataMap.get(normalizeEmpId(empId));
+        if (baseRow && baseCols.terminationDate >= 0) {
+          const termDate = safeCell(baseRow, baseCols.terminationDate);
+          if (termDate) {
+            // Parse and return as Date object
+            return [parseDate(termDate)];
+          }
+        }
+        return [""];
+      });
+      const noticePeriodRange = summarySheet.getRange(startRow + 1, noticePeriodCol, dataRows.length, 1);
+      noticePeriodRange.setValues(noticePeriodValues);
+      noticePeriodRange.setNumberFormat("dd-mmm-yy");
     }
     
     // Format header row
@@ -2043,6 +2054,12 @@ function buildSummarySheet() {
       }
     }
     
+    // Add borders to all data rows (from row 21) - #d9d2e9
+    if (dataRows.length > 0) {
+      const dataRowsRange = summarySheet.getRange(startRow + 1, 1, dataRows.length, headerRow.length);
+      dataRowsRange.setBorder(true, true, true, true, true, true, "#d9d2e9", SpreadsheetApp.BorderStyle.SOLID);
+    }
+    
     // Add helper column in column AH (34) for SUBTOTAL - based on Employee ID (column A), not Rating
     const helperCol = 34;
     if (dataRows.length > 0) {
@@ -2050,14 +2067,13 @@ function buildSummarySheet() {
       const helperRange = summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1);
       helperRange.setFormulas(helperFormulas);
       
-      // Copy formatting from 2nd cell in helper column (row startRow + 1, which is row 21)
-      if (startRow + 1 <= summarySheet.getLastRow()) {
-        const sourceCell = summarySheet.getRange(startRow + 1, helperCol);
-        const format = sourceCell.getNumberFormat();
-        helperRange.setNumberFormat(format);
-      }
+      // Format helper column: middle aligned, Roboto 10, #cccccc
+      helperRange.setVerticalAlignment("middle");
+      helperRange.setFontFamily("Roboto");
+      helperRange.setFontSize(10);
+      helperRange.setFontColor("#cccccc");
       
-      // Update chart data formulas with original references
+      // Update chart data formulas - only update the range references
       updateChartDataFormulas(summarySheet, dataRows.length, startRow, helperCol);
     }
     
@@ -2298,44 +2314,45 @@ function createSlicerPlaceholders(sheet, slicers) {
 }
 
 /**
- * Update chart data formulas with original references
+ * Update chart data formulas - only update range references in SUMPRODUCT
  */
 function updateChartDataFormulas(sheet, numDataRows, dataStartRow, helperCol) {
-  // Rating column is M (13), helper column is AH (34)
-  const ratingCol = 13; // Q2/Q3 Rating
-  
-  // Count ratings
-  const ratings = ["HH", "HM", "MH", "MM", "ML", "NI"];
-  
-  // Chart data starts around row 1, column F (6)
-  const chartStartRow = 1;
-  const chartStartCol = 6; // Column F
-  
   // Calculate the last data row
   const lastDataRow = dataStartRow + numDataRows;
   
-  // Update count formulas for each rating - use original fixed references
-  ratings.forEach((rating, idx) => {
-    const row = chartStartRow + 1 + idx; // Row 2, 3, 4, 5, 6, 7
+  // Chart data is in rows 2-7 (I2:I7), column I (9)
+  // Only update the existing formulas to use the correct last row
+  const chartRows = [2, 3, 4, 5, 6, 7]; // HH, HM, MH, MM, ML, NI
+  
+  chartRows.forEach(row => {
+    const cell = sheet.getRange(row, 9); // Column I
+    const currentFormula = cell.getFormula();
     
-    // Count formula using SUMPRODUCT with fixed ranges (will be updated to match data)
-    // Original: =SUMPRODUCT(($AH$21:$AH$390=1)*($M$21:$M$390=H2))
-    // Use dynamic last row but keep the structure
-    const countFormula = `=SUMPRODUCT(($AH$${dataStartRow + 1}:$AH$${lastDataRow}=1)*($M$${dataStartRow + 1}:$M$${lastDataRow}=$F${row + 1}))`;
-    sheet.getRange(row, chartStartCol + 1).setFormula(countFormula);
-    
-    // Percentage formula - count divided by total of all counts
-    const totalCountRow = chartStartRow + 1 + ratings.length;
-    const pctFormula = `=IF(SUM($G${chartStartRow + 2}:$G${totalCountRow})=0, 0, $G${row + 1}/SUM($G${chartStartRow + 2}:$G${totalCountRow}))`;
-    sheet.getRange(row, chartStartCol + 2).setFormula(pctFormula);
-    
-    // Label formula - use original reference format: =$F3&"- "&$G3&" | "&TEXT($H3,"0%")
-    const labelFormula = `=$F${row + 1}&"- "&$G${row + 1}&" | "&TEXT($H${row + 1},"0%")`;
-    sheet.getRange(row, chartStartCol + 3).setFormula(labelFormula);
+    if (currentFormula && currentFormula.includes("SUMPRODUCT")) {
+      // Replace the range references with the correct last row
+      // Pattern: ($AH$21:$AH$XXX=1)*($M$21:$M$XXX=H2)
+      const updatedFormula = currentFormula.replace(
+        /\$AH\$\d+:\$AH\$\d+/g, 
+        `$AH$${dataStartRow + 1}:$AH$${lastDataRow}`
+      ).replace(
+        /\$M\$\d+:\$M\$\d+/g,
+        `$M$${dataStartRow + 1}:$M$${lastDataRow}`
+      );
+      
+      cell.setFormula(updatedFormula);
+    }
   });
   
-  // Employee count in I17 - use dynamic range
-  sheet.getRange(17, 9).setFormula(`=COUNTIF(AH$${dataStartRow + 1}:AH$${lastDataRow}, 1)`);
+  // Update employee count in I17 if it exists
+  const countCell = sheet.getRange(17, 9);
+  const countFormula = countCell.getFormula();
+  if (countFormula && countFormula.includes("COUNTIF")) {
+    const updatedCountFormula = countFormula.replace(
+      /AH\$?\d+:AH\$?\d+/g,
+      `AH$${dataStartRow + 1}:AH$${lastDataRow}`
+    );
+    countCell.setFormula(updatedCountFormula);
+  }
 }
 
 /**
