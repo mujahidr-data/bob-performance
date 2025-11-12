@@ -95,27 +95,79 @@ class WebHiBobDownloader(HiBobReportDownloader):
         print(f"[{status.upper()}] {message}")
     
     def start_browser(self):
-        """Start browser in headless mode (background) for web interface"""
-        self.log("🌐 Starting browser in background...", 'info')
+        """Start browser (prefer headless, fallback to visible) for web interface"""
+        self.log("🌐 Starting browser...", 'info')
         try:
             from playwright.sync_api import sync_playwright
             
             self.playwright = sync_playwright().start()
             
-            # Launch in headless mode (no visible window)
+            # Try multiple launch strategies for macOS compatibility
+            browser_launched = False
+            launch_errors = []
+            
+            # Strategy 1: Try headless with args (preferred for background)
             try:
+                self.log("   Attempting headless launch with args...", 'info')
                 self.browser = self.playwright.chromium.launch(
-                    headless=True,  # Run in background
+                    headless=True,
                     args=[
                         '--disable-dev-shm-usage',
-                        '--no-sandbox'
+                        '--no-sandbox',
+                        '--disable-gpu',
+                        '--disable-software-rasterizer'
                     ]
                 )
+                browser_launched = True
+                self.log("   ✅ Headless launch successful", 'success')
             except Exception as e:
-                self.log(f"⚠️  Headless launch failed, trying with minimal args: {str(e)}", 'warning')
-                # Fallback
-                self.browser = self.playwright.chromium.launch(headless=True)
+                launch_errors.append(f"Headless with args: {str(e)}")
+                self.log(f"   ⚠️  Headless with args failed: {str(e)}", 'warning')
             
+            # Strategy 2: Try headless without args
+            if not browser_launched:
+                try:
+                    self.log("   Attempting headless launch (minimal)...", 'info')
+                    self.browser = self.playwright.chromium.launch(headless=True)
+                    browser_launched = True
+                    self.log("   ✅ Headless minimal launch successful", 'success')
+                except Exception as e:
+                    launch_errors.append(f"Headless minimal: {str(e)}")
+                    self.log(f"   ⚠️  Headless minimal failed: {str(e)}", 'warning')
+            
+            # Strategy 3: Try non-headless (visible window) - more stable on macOS
+            if not browser_launched:
+                try:
+                    self.log("   Attempting visible launch (fallback)...", 'info')
+                    self.browser = self.playwright.chromium.launch(
+                        headless=False,
+                        args=[
+                            '--disable-dev-shm-usage',
+                            '--no-sandbox'
+                        ]
+                    )
+                    browser_launched = True
+                    self.log("   ✅ Visible launch successful", 'success')
+                except Exception as e:
+                    launch_errors.append(f"Visible: {str(e)}")
+                    self.log(f"   ⚠️  Visible launch failed: {str(e)}", 'warning')
+            
+            # Strategy 4: Try with absolute minimum
+            if not browser_launched:
+                try:
+                    self.log("   Attempting minimal launch (last resort)...", 'info')
+                    self.browser = self.playwright.chromium.launch()
+                    browser_launched = True
+                    self.log("   ✅ Minimal launch successful", 'success')
+                except Exception as e:
+                    launch_errors.append(f"Minimal: {str(e)}")
+            
+            if not browser_launched:
+                error_msg = "All browser launch strategies failed:\n" + "\n".join(f"  - {e}" for e in launch_errors)
+                self.log(f"❌ {error_msg}", 'error')
+                raise Exception(f"Failed to start browser. Tried {len(launch_errors)} strategies. Last error: {launch_errors[-1]}")
+            
+            # Create context
             self.context = self.browser.new_context(
                 accept_downloads=True,
                 viewport={'width': 1920, 'height': 1080},
@@ -131,13 +183,22 @@ class WebHiBobDownloader(HiBobReportDownloader):
             # Verify browser is running
             try:
                 self.page.goto("about:blank", timeout=10000)
-                self.log("✅ Browser started successfully (running in background)", 'success')
+                self.log("✅ Browser started and verified successfully", 'success')
             except Exception as e:
+                # Browser started but verification failed - might still work
                 self.log(f"⚠️  Browser verification warning: {str(e)}", 'warning')
+                self.log("   Continuing anyway - browser may still work", 'info')
                 
         except Exception as e:
-            self.log(f"❌ Failed to start browser: {str(e)}", 'error')
-            raise
+            error_msg = f"❌ Failed to start browser: {str(e)}"
+            self.log(error_msg, 'error')
+            # Clean up if partially initialized
+            try:
+                if hasattr(self, 'playwright') and self.playwright:
+                    self.playwright.stop()
+            except:
+                pass
+            raise Exception(error_msg)
     
     def login_to_hibob(self):
         """Login with web logging"""
