@@ -2491,6 +2491,97 @@ function getFXRate(location) {
 }
 
 /**
+ * Update existing slicer ranges on the Summary sheet
+ * This preserves slicer formatting and position, only updating the data range
+ */
+function updateSlicerRanges(sheet, numRows, dataStartRow) {
+  try {
+    const spreadsheetId = sheet.getParent().getId();
+    const sheetId = sheet.getSheetId();
+    
+    Logger.log(`Updating slicer ranges: ${numRows} rows starting at row ${dataStartRow}`);
+    
+    // Get all slicers in the spreadsheet
+    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+    const slicers = spreadsheet.slicers || [];
+    
+    if (slicers.length === 0) {
+      Logger.log("No slicers found. Skipping slicer range update.");
+      return;
+    }
+    
+    // Column mapping for slicers (based on Summary sheet structure)
+    // Column mapping: A=0, B=1, C=2, D=3 (Tenure), E=4, F=5 (Level), G=6 (Manager), 
+    // H=7 (Department), I=8 (ELT), J=9 (Location), K=10 (AYR), L=11 (H1), 
+    // M=12 (Q2/Q3), N=13 (Promotion), ..., U=20 (Variable Type), W=22 (Notice Period)
+    const slicerColumnMap = {
+      "ELT": 8,
+      "Level": 5,
+      "Tenure": 3,
+      "Department": 7,
+      "AYR 2024 Rating": 10,
+      "AYR": 10,
+      "Variable Type": 20,
+      "Manager": 6,
+      "H1 2025": 11,
+      "H1": 11,
+      "Location": 9,
+      "Q2/Q3 Rating": 12,
+      "Q2/Q3": 12,
+      "Promotion": 13,
+      "Notice Period": 22
+    };
+    
+    const requests = [];
+    
+    // Filter slicers for this sheet and update their ranges
+    slicers.forEach((slicer) => {
+      if (slicer.spec.dataRange.sheetId === sheetId) {
+        const slicerTitle = slicer.spec.title;
+        const columnIndex = slicerColumnMap[slicerTitle];
+        
+        if (columnIndex !== undefined) {
+          Logger.log(`Updating slicer: ${slicerTitle} (column ${columnIndex})`);
+          
+          requests.push({
+            updateSlicer: {
+              slicerId: slicer.slicerId,
+              slicer: {
+                spec: {
+                  dataRange: {
+                    sheetId: sheetId,
+                    startRowIndex: dataStartRow, // Header row (0-indexed, so row 20 = index 19)
+                    endRowIndex: dataStartRow + numRows + 1, // +1 to include header
+                    startColumnIndex: columnIndex,
+                    endColumnIndex: columnIndex + 1
+                  }
+                }
+              },
+              fields: "spec.dataRange"
+            }
+          });
+        } else {
+          Logger.log(`⚠️ No column mapping found for slicer: ${slicerTitle}`);
+        }
+      }
+    });
+    
+    if (requests.length > 0) {
+      Sheets.Spreadsheets.batchUpdate({
+        requests: requests
+      }, spreadsheetId);
+      Logger.log(`✓ Updated ${requests.length} slicer ranges successfully`);
+    } else {
+      Logger.log("No slicers to update on this sheet");
+    }
+    
+  } catch (error) {
+    Logger.log(`⚠️ Error updating slicer ranges: ${error.message}`);
+    Logger.log("Slicers may need manual range adjustment or recreation");
+  }
+}
+
+/**
  * Create slicers on the Summary sheet using Sheets API
  */
 function createSlicers(sheet, numRows, dataStartRow) {
