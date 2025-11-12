@@ -56,7 +56,13 @@ class ManagerBlurbGenerator:
     def __init__(self, config_path: str):
         """Initialize with config file"""
         self.config = self._load_config(config_path)
-        self.spreadsheet_id = self.config.get('spreadsheet_id')
+        self.spreadsheet_id = self.config.get('spreadsheet_id') or self.config.get('SPREADSHEET_ID')
+        
+        if not self.spreadsheet_id:
+            print("❌ spreadsheet_id not found in config.json")
+            print("   Please add 'spreadsheet_id' or 'SPREADSHEET_ID' to config/config.json")
+            sys.exit(1)
+        
         self.service = self._authenticate()
         self.summarizer = None
         
@@ -167,10 +173,13 @@ class ManagerBlurbGenerator:
         ]
         
         for col_key in feedback_columns:
-            if col_key in col_indices and col_indices[col_key] < len(row):
-                text = str(row[col_indices[col_key]]).strip()
-                if text and text not in ['', 'N/A', 'n/a', '-', 'None']:
-                    feedback_parts.append(text)
+            try:
+                if col_key in col_indices and col_indices[col_key] < len(row):
+                    text = str(row[col_indices[col_key]]).strip()
+                    if text and text not in ['', 'N/A', 'n/a', '-', 'None', 'None.']:
+                        feedback_parts.append(text)
+            except (IndexError, KeyError):
+                continue
         
         # Combine all feedback
         combined = ' '.join(feedback_parts)
@@ -326,9 +335,18 @@ class ManagerBlurbGenerator:
                 if len(row) == 0:
                     continue
                 
-                # Get employee ID and name
-                emp_id = str(row[col_indices['employee_id']]).strip() if 'employee_id' in col_indices else ''
-                emp_name = str(row[col_indices['employee_name']]).strip() if 'employee_name' in col_indices else ''
+                # Get employee ID and name (with bounds checking)
+                emp_id = ''
+                emp_name = ''
+                
+                try:
+                    if 'employee_id' in col_indices and col_indices['employee_id'] < len(row):
+                        emp_id = str(row[col_indices['employee_id']]).strip()
+                    if 'employee_name' in col_indices and col_indices['employee_name'] < len(row):
+                        emp_name = str(row[col_indices['employee_name']]).strip()
+                except IndexError:
+                    print(f"   ⚠️  Skipping row {i+1}: Index out of range")
+                    continue
                 
                 if not emp_id:
                     continue
