@@ -874,11 +874,15 @@ function updateSlicersOnly() {
     // Update slicer ranges
     updateSlicerRanges(summarySheet, numDataRows, dataStartRow - 1);
     
+    // Get the actual range that was set for better feedback
+    const slicers = summarySheet.getSlicers();
+    const rangeNotation = slicers.length > 0 ? slicers[0].getRange().getA1Notation() : `Row ${dataStartRow + 1} to ${lastRow}`;
+    
     SpreadsheetApp.getUi().alert(
       "Success",
-      `Slicer ranges updated successfully!\n\n` +
-      `Data rows: ${numDataRows}\n` +
-      `Range: Row ${dataStartRow + 1} to ${lastRow}\n\n` +
+      `Updated ${slicers.length} slicer ranges successfully!\n\n` +
+      `New range: ${rangeNotation}\n` +
+      `Data rows: ${numDataRows}\n\n` +
       `All slicer filters and formatting preserved.`,
       SpreadsheetApp.getUi().ButtonSet.OK
     );
@@ -2643,12 +2647,7 @@ function updateSlicerRanges(sheet, numRows, dataStartRow) {
     
     Logger.log(`✓ Successfully updated ${slicers.length} slicer ranges`);
     
-    SpreadsheetApp.getUi().alert(
-      "Success",
-      `Updated ${slicers.length} slicer ranges to:\n${newRange.getA1Notation()}\n\n` +
-      `(Rows ${dataStartRow + 1} to ${lastRow})`,
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
+    // Don't show alert here - let the calling function handle UI feedback
     
   } catch (error) {
     Logger.log(`❌ Error updating slicer ranges: ${error.message}`);
