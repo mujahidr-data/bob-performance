@@ -651,7 +651,7 @@ if __name__ == '__main__':
     
     try:
         # Use make_server for better control over shutdown
-        global server
+        # server is already a module-level variable, no need for 'global'
         server = make_server('127.0.0.1', port, app, threaded=True)
         print("✅ Server started successfully")
         server.serve_forever()
