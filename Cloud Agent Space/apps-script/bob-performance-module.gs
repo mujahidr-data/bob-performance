@@ -101,16 +101,19 @@ function importAllBobData() {
     
     Logger.log('Starting full data import...');
     importBobDataSimpleWithLookup();
-    Logger.log('1/4: Base Data imported');
+    Logger.log('1/5: Base Data imported');
     
     importBobBonusHistoryLatest();
-    Logger.log('2/4: Bonus History imported');
+    Logger.log('2/5: Bonus History imported');
     
     importBobCompHistoryLatest();
-    Logger.log('3/4: Compensation History imported');
+    Logger.log('3/5: Compensation History imported');
     
     importBobFullCompHistory();
-    Logger.log('4/4: Full Comp History imported');
+    Logger.log('4/5: Full Comp History imported');
+    
+    importBobPerformanceRatings();
+    Logger.log('5/5: Performance Ratings imported');
     
     Logger.log('All imports completed successfully!');
     ui.alert('Success', 'All data has been imported successfully!', ui.ButtonSet.OK);
