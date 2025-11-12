@@ -1899,7 +1899,7 @@ function buildSummarySheet() {
       "Department", "ELT", "Location", "AYR 2024 Rating", "H1 2025", "Q2/Q3 Rating", 
       "Promotion", "Last Promotion Date", "Last Increase Date", "Last Increase %", 
       "Change Reason", "Base Salary (Local)", "Base Salary (USD)", "Variable Type", 
-      "Variable %", "Notice Period", "Manager Blurb"
+      "Variable %", "Notice Period", "Manager Blurb", "AI Readiness Category"
     ];
     
     const dataRows = [];
@@ -2029,10 +2029,13 @@ function buildSummarySheet() {
       // Manager Blurb - will be set as VLOOKUP formula to hidden sheet
       const managerBlurb = ""; // Will be set as formula
       
+      // AI Readiness Category - will be set as VLOOKUP formula from AI Mapping sheet
+      const aiReadinessCategory = ""; // Will be set as formula
+      
       dataRows.push([
         empIdVal, empName, startDate, tenure, jobTitle, level, manager, department, elt, location,
         ayrRating, h1Rating, q23Rating, promotion, lastPromoDate, lastIncreaseDate, 
-        lastIncreasePct, changeReason, baseSalary, baseSalaryUSD, variableType, variablePct, noticePeriod, managerBlurb
+        lastIncreasePct, changeReason, baseSalary, baseSalaryUSD, variableType, variablePct, noticePeriod, managerBlurb, aiReadinessCategory
       ]);
     });
     
@@ -2068,6 +2071,16 @@ function buildSummarySheet() {
       managerBlurbRange.setFormulas(managerBlurbFormulas);
       // Wrap text for better readability
       managerBlurbRange.setWrap(true);
+      
+      // Set AI Readiness Category formulas (column 25) - VLOOKUP from 'AI Readiness Mapping' sheet
+      // Formula: =IFERROR(VLOOKUP($H{row},'AI Readiness Mapping'!$A:$B,2,FALSE),"Not Mapped")
+      // Column H is Department
+      const aiReadinessCol = 25;
+      const aiReadinessFormulas = dataRows.map((_, i) => [`=IFERROR(VLOOKUP($H${startRow + 1 + i},'AI Readiness Mapping'!$A:$B,2,FALSE),"Not Mapped")`]);
+      const aiReadinessRange = summarySheet.getRange(startRow + 1, aiReadinessCol, dataRows.length, 1);
+      aiReadinessRange.setFormulas(aiReadinessFormulas);
+      // Wrap text for better readability
+      aiReadinessRange.setWrap(true);
     }
     
     // Format header row
