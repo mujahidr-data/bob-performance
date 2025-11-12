@@ -2590,16 +2590,39 @@ function updateSlicerRanges(sheet, numRows, dataStartRow) {
     const spreadsheetId = sheet.getParent().getId();
     const sheetId = sheet.getSheetId();
     
-    Logger.log(`Updating slicer ranges: ${numRows} rows starting at row ${dataStartRow}`);
+    Logger.log(`=== Starting Slicer Range Update ===`);
+    Logger.log(`Spreadsheet ID: ${spreadsheetId}`);
+    Logger.log(`Sheet ID: ${sheetId}`);
+    Logger.log(`Updating slicer ranges: ${numRows} rows starting at row ${dataStartRow + 1} (0-indexed: ${dataStartRow})`);
+    Logger.log(`New range will be: Row ${dataStartRow + 1} to ${dataStartRow + numRows + 1}`);
+    
+    // Check if Sheets API is available
+    if (typeof Sheets === 'undefined') {
+      throw new Error("Sheets API is not enabled. Please enable it in Extensions > Apps Script > Services");
+    }
     
     // Get all slicers in the spreadsheet
+    Logger.log("Fetching slicers from spreadsheet...");
     const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
     const slicers = spreadsheet.slicers || [];
     
+    Logger.log(`Found ${slicers.length} total slicers in spreadsheet`);
+    
     if (slicers.length === 0) {
-      Logger.log("No slicers found. Skipping slicer range update.");
+      Logger.log("⚠️ No slicers found. Skipping slicer range update.");
+      SpreadsheetApp.getUi().alert(
+        "No Slicers Found",
+        "No slicers were found in this spreadsheet. Please create slicers first before updating their ranges.",
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
       return;
     }
+    
+    // Log all slicers found
+    slicers.forEach((slicer, idx) => {
+      Logger.log(`Slicer ${idx + 1}: ${slicer.spec.title} (ID: ${slicer.slicerId}, Sheet ID: ${slicer.spec.dataRange.sheetId})`);
+      Logger.log(`  Current range: Row ${slicer.spec.dataRange.startRowIndex} to ${slicer.spec.dataRange.endRowIndex}, Col ${slicer.spec.dataRange.startColumnIndex} to ${slicer.spec.dataRange.endColumnIndex}`);
+    });
     
     // Column mapping for slicers (based on Summary sheet structure)
     // Column mapping: A=0, B=1, C=2, D=3 (Tenure), E=4, F=5 (Level), G=6 (Manager), 
@@ -2624,15 +2647,17 @@ function updateSlicerRanges(sheet, numRows, dataStartRow) {
     };
     
     const requests = [];
+    let slicersOnThisSheet = 0;
     
     // Filter slicers for this sheet and update their ranges
     slicers.forEach((slicer) => {
       if (slicer.spec.dataRange.sheetId === sheetId) {
+        slicersOnThisSheet++;
         const slicerTitle = slicer.spec.title;
         const columnIndex = slicerColumnMap[slicerTitle];
         
         if (columnIndex !== undefined) {
-          Logger.log(`Updating slicer: ${slicerTitle} (column ${columnIndex})`);
+          Logger.log(`✓ Will update slicer: ${slicerTitle} (column ${columnIndex})`);
           
           requests.push({
             updateSlicer: {
@@ -2657,18 +2682,51 @@ function updateSlicerRanges(sheet, numRows, dataStartRow) {
       }
     });
     
+    Logger.log(`Found ${slicersOnThisSheet} slicers on Summary sheet`);
+    Logger.log(`Prepared ${requests.length} update requests`);
+    
     if (requests.length > 0) {
-      Sheets.Spreadsheets.batchUpdate({
-        requests: requests
-      }, spreadsheetId);
-      Logger.log(`✓ Updated ${requests.length} slicer ranges successfully`);
+      Logger.log("Sending batch update request to Sheets API...");
+      
+      try {
+        const response = Sheets.Spreadsheets.batchUpdate({
+          requests: requests
+        }, spreadsheetId);
+        
+        Logger.log(`✓ Sheets API response: ${JSON.stringify(response)}`);
+        Logger.log(`✓ Successfully updated ${requests.length} slicer ranges`);
+        
+        SpreadsheetApp.getUi().alert(
+          "Success",
+          `Updated ${requests.length} slicer ranges to include rows ${dataStartRow + 1} to ${dataStartRow + numRows + 1}`,
+          SpreadsheetApp.getUi().ButtonSet.OK
+        );
+      } catch (apiError) {
+        Logger.log(`❌ Sheets API error: ${apiError.message}`);
+        Logger.log(`Full error: ${JSON.stringify(apiError)}`);
+        throw new Error(`Sheets API failed: ${apiError.message}`);
+      }
     } else {
-      Logger.log("No slicers to update on this sheet");
+      Logger.log("⚠️ No slicers to update on this sheet");
+      SpreadsheetApp.getUi().alert(
+        "No Slicers to Update",
+        `Found ${slicersOnThisSheet} slicers on this sheet, but none match the expected column mappings.\n\nExpected slicer titles: ${Object.keys(slicerColumnMap).join(', ')}`,
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
     }
     
   } catch (error) {
-    Logger.log(`⚠️ Error updating slicer ranges: ${error.message}`);
-    Logger.log("Slicers may need manual range adjustment or recreation");
+    Logger.log(`❌ Error updating slicer ranges: ${error.message}`);
+    Logger.log(`Stack trace: ${error.stack}`);
+    
+    SpreadsheetApp.getUi().alert(
+      "Error Updating Slicers",
+      `Failed to update slicer ranges: ${error.message}\n\n` +
+      `Please check the execution log (View > Logs) for details.`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    
+    throw error;
   }
 }
 
