@@ -2603,17 +2603,32 @@ function updateSlicerRanges(sheet, numRows, dataStartRow) {
     
     // Get all slicers in the spreadsheet - they're nested in each sheet
     Logger.log("Fetching slicers from spreadsheet...");
-    const spreadsheet = Sheets.Spreadsheets.get(spreadsheetId, {
-      fields: "sheets(properties(sheetId,title),slicers)"
-    });
+    
+    // Use the correct API method to get spreadsheet with slicers
+    let spreadsheet;
+    try {
+      spreadsheet = Sheets.Spreadsheets.get(spreadsheetId, {
+        includeGridData: false,
+        fields: "sheets.slicers,sheets.properties"
+      });
+    } catch (e) {
+      Logger.log(`First attempt failed: ${e.message}, trying without fields parameter...`);
+      // Fallback: get full spreadsheet data
+      spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
+    }
     
     // Collect all slicers from all sheets
     let slicers = [];
     if (spreadsheet.sheets) {
       spreadsheet.sheets.forEach(sheetData => {
+        const sheetTitle = sheetData.properties ? sheetData.properties.title : "Unknown";
+        const sheetIdValue = sheetData.properties ? sheetData.properties.sheetId : "Unknown";
+        
         if (sheetData.slicers && sheetData.slicers.length > 0) {
-          Logger.log(`Found ${sheetData.slicers.length} slicers on sheet: ${sheetData.properties.title} (ID: ${sheetData.properties.sheetId})`);
+          Logger.log(`Found ${sheetData.slicers.length} slicers on sheet: ${sheetTitle} (ID: ${sheetIdValue})`);
           slicers = slicers.concat(sheetData.slicers);
+        } else {
+          Logger.log(`No slicers on sheet: ${sheetTitle}`);
         }
       });
     }
