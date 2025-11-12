@@ -1675,7 +1675,7 @@ function buildSummarySheet() {
       department: findColumnIndex(baseHeaders, ["Department"]),
       elt: findColumnIndex(baseHeaders, ["ELT"]),
       location: findColumnIndex(baseHeaders, ["Site", "Location"]), // Prefer Site for FX lookup
-      terminationDate: findColumnIndex(baseHeaders, ["Termination date", "Termination Date"])
+      terminationDate: findColumnIndex(baseHeaders, ["Termination date", "Termination Date"]),
       activeStatus: findColumnIndex(baseHeaders, ["Active/Inactive", "Status"]),
       baseSalary: findColumnIndex(baseHeaders, ["Base salary", "Base Salary", "Base Pay"]),
       variableType: findColumnIndex(baseHeaders, ["Variable Type"]),
@@ -1907,6 +1907,15 @@ function buildSummarySheet() {
     const startRow = 20;
     const dataRange = summarySheet.getRange(startRow, 1, dataRows.length + 1, headerRow.length);
     dataRange.setValues([headerRow, ...dataRows]);
+    
+    // Set Notice Period formulas (column 23) - if active employee has termination date, they're on notice
+    // Formula: =IF(XLOOKUP($A{row},'Base Data'!B:B,'Base Data'!Q:Q,"")<>"", XLOOKUP($A${startRow + 1 + i},'Base Data'!B:B,'Base Data'!Q:Q,""), "")
+    // Column Q is Termination date
+    if (dataRows.length > 0) {
+      const noticePeriodCol = 23;
+      const noticePeriodFormulas = dataRows.map((_, i) => [`=IF(XLOOKUP($A${startRow + 1 + i},'Base Data'!B:B,'Base Data'!Q:Q,"")<>"", XLOOKUP($A${startRow + 1 + i},'Base Data'!B:B,'Base Data'!Q:Q,""), "")`]);
+      summarySheet.getRange(startRow + 1, noticePeriodCol, dataRows.length, 1).setFormulas(noticePeriodFormulas);
+    }
     
     // Format header row
     const headerRange = summarySheet.getRange(startRow, 1, 1, headerRow.length);
