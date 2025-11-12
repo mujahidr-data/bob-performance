@@ -2583,164 +2583,72 @@ function getFXRate(location) {
 
 /**
  * Update existing slicer ranges on the Summary sheet
+ * Uses the simple SpreadsheetApp approach with "reset then set" workaround
  * This preserves slicer formatting and position, only updating the data range
  */
 function updateSlicerRanges(sheet, numRows, dataStartRow) {
   try {
-    const spreadsheetId = sheet.getParent().getId();
-    const sheetId = sheet.getSheetId();
-    
     Logger.log(`=== Starting Slicer Range Update ===`);
-    Logger.log(`Spreadsheet ID: ${spreadsheetId}`);
-    Logger.log(`Sheet ID: ${sheetId}`);
-    Logger.log(`Updating slicer ranges: ${numRows} rows starting at row ${dataStartRow + 1} (0-indexed: ${dataStartRow})`);
+    Logger.log(`Sheet: ${sheet.getName()}`);
+    Logger.log(`Updating slicer ranges: ${numRows} rows starting at row ${dataStartRow + 1}`);
     Logger.log(`New range will be: Row ${dataStartRow + 1} to ${dataStartRow + numRows + 1}`);
     
-    // Check if Sheets API is available
-    if (typeof Sheets === 'undefined') {
-      throw new Error("Sheets API is not enabled. Please enable it in Extensions > Apps Script > Services");
-    }
-    
-    // Get all slicers in the spreadsheet - they're nested in each sheet
-    Logger.log("Fetching slicers from spreadsheet...");
-    
-    // Use the correct API method to get spreadsheet with slicers
-    let spreadsheet;
-    try {
-      spreadsheet = Sheets.Spreadsheets.get(spreadsheetId, {
-        includeGridData: false,
-        fields: "sheets.slicers,sheets.properties"
-      });
-    } catch (e) {
-      Logger.log(`First attempt failed: ${e.message}, trying without fields parameter...`);
-      // Fallback: get full spreadsheet data
-      spreadsheet = Sheets.Spreadsheets.get(spreadsheetId);
-    }
-    
-    // Collect all slicers from all sheets
-    let slicers = [];
-    if (spreadsheet.sheets) {
-      spreadsheet.sheets.forEach(sheetData => {
-        const sheetTitle = sheetData.properties ? sheetData.properties.title : "Unknown";
-        const sheetIdValue = sheetData.properties ? sheetData.properties.sheetId : "Unknown";
-        
-        if (sheetData.slicers && sheetData.slicers.length > 0) {
-          Logger.log(`Found ${sheetData.slicers.length} slicers on sheet: ${sheetTitle} (ID: ${sheetIdValue})`);
-          slicers = slicers.concat(sheetData.slicers);
-        } else {
-          Logger.log(`No slicers on sheet: ${sheetTitle}`);
-        }
-      });
-    }
-    
-    Logger.log(`Found ${slicers.length} total slicers in spreadsheet`);
+    // Get all slicers on this sheet
+    const slicers = sheet.getSlicers();
     
     if (slicers.length === 0) {
       Logger.log("⚠️ No slicers found. Skipping slicer range update.");
       SpreadsheetApp.getUi().alert(
         "No Slicers Found",
-        "No slicers were found in this spreadsheet. Please create slicers first before updating their ranges.",
+        "No slicers were found on this sheet. Please create slicers first before updating their ranges.",
         SpreadsheetApp.getUi().ButtonSet.OK
       );
       return;
     }
     
-    // Log all slicers found
+    Logger.log(`Found ${slicers.length} slicers on sheet`);
+    
+    // Define the new range for slicers
+    // From row dataStartRow+1 (header row) to the last data row, all columns
+    const lastRow = dataStartRow + numRows + 1;
+    const lastColumn = sheet.getLastColumn();
+    const newRange = sheet.getRange(dataStartRow + 1, 1, numRows + 1, lastColumn);
+    
+    Logger.log(`New range: ${newRange.getA1Notation()}`);
+    
+    // Workaround for "common rows" error:
+    // Reset all slicers to a tiny range first, then set to desired range
+    const resetRange = sheet.getRange(1, 1, 1, 1); // Single cell outside slicer coverage
+    
+    Logger.log("Step 1: Resetting all slicers to A1...");
     slicers.forEach((slicer, idx) => {
-      Logger.log(`Slicer ${idx + 1}: ${slicer.spec.title} (ID: ${slicer.slicerId}, Sheet ID: ${slicer.spec.dataRange.sheetId})`);
-      Logger.log(`  Current range: Row ${slicer.spec.dataRange.startRowIndex} to ${slicer.spec.dataRange.endRowIndex}, Col ${slicer.spec.dataRange.startColumnIndex} to ${slicer.spec.dataRange.endColumnIndex}`);
-    });
-    
-    // Column mapping for slicers (based on Summary sheet structure)
-    // Column mapping: A=0, B=1, C=2, D=3 (Tenure), E=4, F=5 (Level), G=6 (Manager), 
-    // H=7 (Department), I=8 (ELT), J=9 (Location), K=10 (AYR), L=11 (H1), 
-    // M=12 (Q2/Q3), N=13 (Promotion), ..., U=20 (Variable Type), W=22 (Notice Period)
-    const slicerColumnMap = {
-      "ELT": 8,
-      "Level": 5,
-      "Tenure": 3,
-      "Department": 7,
-      "AYR 2024 Rating": 10,
-      "AYR": 10,
-      "Variable Type": 20,
-      "Manager": 6,
-      "H1 2025": 11,
-      "H1": 11,
-      "Location": 9,
-      "Q2/Q3 Rating": 12,
-      "Q2/Q3": 12,
-      "Promotion": 13,
-      "Notice Period": 22
-    };
-    
-    const requests = [];
-    let slicersOnThisSheet = 0;
-    
-    // Filter slicers for this sheet and update their ranges
-    slicers.forEach((slicer) => {
-      if (slicer.spec.dataRange.sheetId === sheetId) {
-        slicersOnThisSheet++;
-        const slicerTitle = slicer.spec.title;
-        const columnIndex = slicerColumnMap[slicerTitle];
-        
-        if (columnIndex !== undefined) {
-          Logger.log(`✓ Will update slicer: ${slicerTitle} (column ${columnIndex})`);
-          
-          requests.push({
-            updateSlicer: {
-              slicerId: slicer.slicerId,
-              slicer: {
-                spec: {
-                  dataRange: {
-                    sheetId: sheetId,
-                    startRowIndex: dataStartRow, // Header row (0-indexed, so row 20 = index 19)
-                    endRowIndex: dataStartRow + numRows + 1, // +1 to include header
-                    startColumnIndex: columnIndex,
-                    endColumnIndex: columnIndex + 1
-                  }
-                }
-              },
-              fields: "spec.dataRange"
-            }
-          });
-        } else {
-          Logger.log(`⚠️ No column mapping found for slicer: ${slicerTitle}`);
-        }
-      }
-    });
-    
-    Logger.log(`Found ${slicersOnThisSheet} slicers on Summary sheet`);
-    Logger.log(`Prepared ${requests.length} update requests`);
-    
-    if (requests.length > 0) {
-      Logger.log("Sending batch update request to Sheets API...");
-      
       try {
-        const response = Sheets.Spreadsheets.batchUpdate({
-          requests: requests
-        }, spreadsheetId);
-        
-        Logger.log(`✓ Sheets API response: ${JSON.stringify(response)}`);
-        Logger.log(`✓ Successfully updated ${requests.length} slicer ranges`);
-        
-        SpreadsheetApp.getUi().alert(
-          "Success",
-          `Updated ${requests.length} slicer ranges to include rows ${dataStartRow + 1} to ${dataStartRow + numRows + 1}`,
-          SpreadsheetApp.getUi().ButtonSet.OK
-        );
-      } catch (apiError) {
-        Logger.log(`❌ Sheets API error: ${apiError.message}`);
-        Logger.log(`Full error: ${JSON.stringify(apiError)}`);
-        throw new Error(`Sheets API failed: ${apiError.message}`);
+        slicer.setRange(resetRange);
+        Logger.log(`  ✓ Reset slicer ${idx + 1}`);
+      } catch (e) {
+        Logger.log(`  ⚠️ Could not reset slicer ${idx + 1}: ${e.message}`);
       }
-    } else {
-      Logger.log("⚠️ No slicers to update on this sheet");
-      SpreadsheetApp.getUi().alert(
-        "No Slicers to Update",
-        `Found ${slicersOnThisSheet} slicers on this sheet, but none match the expected column mappings.\n\nExpected slicer titles: ${Object.keys(slicerColumnMap).join(', ')}`,
-        SpreadsheetApp.getUi().ButtonSet.OK
-      );
-    }
+    });
+    
+    Logger.log("Step 2: Setting all slicers to new range...");
+    slicers.forEach((slicer, idx) => {
+      try {
+        slicer.setRange(newRange);
+        Logger.log(`  ✓ Updated slicer ${idx + 1} to ${newRange.getA1Notation()}`);
+      } catch (e) {
+        Logger.log(`  ⚠️ Could not update slicer ${idx + 1}: ${e.message}`);
+        throw e;
+      }
+    });
+    
+    Logger.log(`✓ Successfully updated ${slicers.length} slicer ranges`);
+    
+    SpreadsheetApp.getUi().alert(
+      "Success",
+      `Updated ${slicers.length} slicer ranges to:\n${newRange.getA1Notation()}\n\n` +
+      `(Rows ${dataStartRow + 1} to ${lastRow})`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
     
   } catch (error) {
     Logger.log(`❌ Error updating slicer ranges: ${error.message}`);
@@ -2749,7 +2657,7 @@ function updateSlicerRanges(sheet, numRows, dataStartRow) {
     SpreadsheetApp.getUi().alert(
       "Error Updating Slicers",
       `Failed to update slicer ranges: ${error.message}\n\n` +
-      `Please check the execution log (View > Logs) for details.`,
+      `This can happen if slicers have different ranges. Try recreating the slicers.`,
       SpreadsheetApp.getUi().ButtonSet.OK
     );
     
