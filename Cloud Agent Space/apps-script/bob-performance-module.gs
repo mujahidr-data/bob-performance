@@ -837,6 +837,159 @@ function generateManagerBlurbs() {
 }
 
 /**
+ * Create AI Readiness Mapping Sheet
+ * 
+ * Creates a reference sheet with Department → AI Readiness Category mapping
+ * and validation dropdown for leadership to assess employees
+ */
+function createAIReadinessMapping() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ui = SpreadsheetApp.getUi();
+    
+    // Check if sheet already exists
+    let mappingSheet = ss.getSheetByName("AI Readiness Mapping");
+    
+    if (mappingSheet) {
+      const response = ui.alert(
+        "Sheet Exists",
+        "AI Readiness Mapping sheet already exists. Do you want to recreate it? This will overwrite existing data.",
+        ui.ButtonSet.YES_NO
+      );
+      
+      if (response !== ui.Button.YES) {
+        return;
+      }
+      
+      ss.deleteSheet(mappingSheet);
+    }
+    
+    // Create new mapping sheet
+    mappingSheet = ss.insertSheet("AI Readiness Mapping");
+    
+    // Define function-to-category mapping
+    const mappingData = [
+      ["Department/Function", "AI Readiness Category"],
+      ["Engineering", "AI-Accelerated Developer"],
+      ["Product", "AI-Forward Solutions Engineer"],
+      ["Customer Success", "AI Outcome Manager"],
+      ["Marketing", "AI Content Intelligence Strategist"],
+      ["Sales", "AI-Augmented Revenue Accelerator"],
+      ["Human Resources", "AI-Powered People Strategist"],
+      ["People Ops", "AI-Powered People Strategist"],
+      ["HR", "AI-Powered People Strategist"],
+      ["Finance", "AI-Driven Financial Intelligence Analyst"],
+      ["General & Administrative", "AI Operations Optimizer"],
+      ["G&A", "AI Operations Optimizer"],
+      ["Operations", "AI Operations Optimizer"],
+      ["Support", "AI-Enhanced Support Specialist"],
+      ["Service Delivery", "AI-Enhanced Support Specialist"],
+      ["Data", "AI-Native Insights Engineer"],
+      ["Analytics", "AI-Native Insights Engineer"],
+      ["Data & Analytics", "AI-Native Insights Engineer"],
+      ["Design", "AI-Augmented Experience Designer"],
+      ["UX", "AI-Augmented Experience Designer"],
+      ["Information Security", "AI-Powered Security Guardian"],
+      ["Security", "AI-Powered Security Guardian"],
+      ["Legal", "AI-Assisted Legal Intelligence Analyst"],
+      ["Compliance", "AI-Assisted Legal Intelligence Analyst"]
+    ];
+    
+    // Write mapping data
+    const mappingRange = mappingSheet.getRange(1, 1, mappingData.length, 2);
+    mappingRange.setValues(mappingData);
+    
+    // Format header
+    const headerRange = mappingSheet.getRange(1, 1, 1, 2);
+    headerRange.setFontWeight("bold");
+    headerRange.setBackground("#9825ff");
+    headerRange.setFontColor("#ffffff");
+    headerRange.setFontFamily("Roboto");
+    headerRange.setFontSize(11);
+    
+    // Format data rows
+    const dataRange = mappingSheet.getRange(2, 1, mappingData.length - 1, 2);
+    dataRange.setFontFamily("Roboto");
+    dataRange.setFontSize(10);
+    
+    // Alternate row colors for readability
+    for (let i = 2; i <= mappingData.length; i++) {
+      const rowRange = mappingSheet.getRange(i, 1, 1, 2);
+      if (i % 2 === 0) {
+        rowRange.setBackground("#f3f3f3");
+      }
+    }
+    
+    // Auto-resize columns
+    mappingSheet.autoResizeColumns(1, 2);
+    
+    // Freeze header row
+    mappingSheet.setFrozenRows(1);
+    
+    // Add instructions in column D
+    const instructions = [
+      ["Instructions"],
+      ["This sheet maps each Department/Function to its AI Readiness Category."],
+      [""],
+      ["The Summary sheet's 'AI Readiness Category' column uses VLOOKUP to auto-populate based on employee department."],
+      [""],
+      ["To assess employees:"],
+      ["1. Review the AI Readiness Categories documentation (see docs/AI_READINESS_CATEGORIES.md)"],
+      ["2. Add a 'AI Readiness Assessment' column to Summary sheet"],
+      ["3. Use data validation with these options: 'AI-Ready', 'AI-Capable', 'Not AI-Ready'"],
+      ["4. Leadership evaluates each employee against their function's criteria"],
+      [""],
+      ["Category Descriptions:"],
+      ["• AI-Ready: Demonstrates 3+ criteria, measurable impact, proactive adoption"],
+      ["• AI-Capable: Demonstrates 2 criteria, uses AI but limited impact, needs coaching"],
+      ["• Not AI-Ready: 0-1 criteria, resistant to AI, manual-first approach"],
+      [""],
+      ["📖 Full criteria available in: docs/AI_READINESS_CATEGORIES.md"]
+    ];
+    
+    const instructionsRange = mappingSheet.getRange(1, 4, instructions.length, 1);
+    instructionsRange.setValues(instructions);
+    instructionsRange.setFontFamily("Roboto");
+    instructionsRange.setFontSize(9);
+    instructionsRange.setWrap(true);
+    
+    // Format instructions header
+    const instructionsHeader = mappingSheet.getRange(1, 4, 1, 1);
+    instructionsHeader.setFontWeight("bold");
+    instructionsHeader.setBackground("#ff9901");
+    instructionsHeader.setFontColor("#ffffff");
+    instructionsHeader.setFontSize(10);
+    
+    // Set column widths
+    mappingSheet.setColumnWidth(1, 250);
+    mappingSheet.setColumnWidth(2, 350);
+    mappingSheet.setColumnWidth(4, 600);
+    
+    ui.alert(
+      "Success",
+      "AI Readiness Mapping sheet created successfully!\n\n" +
+      "Next steps:\n" +
+      "1. Review/customize department mappings if needed\n" +
+      "2. Run 'Build Summary Sheet' to populate the AI Readiness Category column\n" +
+      "3. Add an 'AI Readiness Assessment' column for leadership evaluation\n\n" +
+      "📖 Full category criteria: docs/AI_READINESS_CATEGORIES.md",
+      ui.ButtonSet.OK
+    );
+    
+    Logger.log("AI Readiness Mapping sheet created successfully");
+    
+  } catch (error) {
+    Logger.log(`Error creating AI Readiness Mapping sheet: ${error.message}`);
+    SpreadsheetApp.getUi().alert(
+      "Error",
+      `Failed to create AI Readiness Mapping sheet: ${error.message}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    throw error;
+  }
+}
+
+/**
  * Launches the web interface for Performance Report automation
  * Opens a dialog with instructions and a link to the web interface
  */
