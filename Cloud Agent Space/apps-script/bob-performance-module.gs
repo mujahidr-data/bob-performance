@@ -1670,6 +1670,12 @@ function buildSummarySheet() {
     const perfReportHeaders = perfReportData.length > 0 ? perfReportData[0] : [];
     const perfReportRows = perfReportData.slice(1);
     
+    // Get Performance Ratings sheet for AYR and H1 lookups
+    const perfRatingsSheet = ss.getSheetByName(SHEET_NAMES.PERF_RATINGS);
+    const perfRatingsData = perfRatingsSheet ? perfRatingsSheet.getDataRange().getValues() : [];
+    const perfRatingsHeaders = perfRatingsData.length > 0 ? perfRatingsData[0] : [];
+    const perfRatingsRows = perfRatingsData.slice(1);
+    
     // Find column indices in Base Data
     const baseCols = {
       empId: findColumnIndex(baseHeaders, ["Emp ID", "Employee ID", "Employee Id"]),
@@ -1712,6 +1718,13 @@ function buildSummarySheet() {
       promotionQ1: findColumnIndex(perfReportHeaders, ["Is this employee on track to be promoted", "promotion", "Q1 2026"])
     };
     
+    // Find column indices in Performance Ratings (for AYR and H1)
+    const perfRatingsCols = {
+      empId: findColumnIndex(perfRatingsHeaders, ["Emp ID", "Employee ID", "Employee Id", "employee id"]),
+      ayr2024: findColumnIndex(perfRatingsHeaders, ["AYR 2024", "AYR2024", "Annual Year Review 2024", "2024 Rating"]),
+      h12025: findColumnIndex(perfRatingsHeaders, ["H1 2025", "H12025", "Half Year 2025", "H1 Rating"])
+    };
+    
     // Build lookup maps
     const baseDataMap = new Map();
     baseDataRows.forEach(row => {
@@ -1745,6 +1758,15 @@ function buildSummarySheet() {
       }
     });
     
+    // Build Performance Ratings map for AYR and H1 lookups
+    const perfRatingsMap = new Map();
+    perfRatingsRows.forEach(row => {
+      const empId = normalizeEmpId(safeCell(row, perfRatingsCols.empId));
+      if (empId) {
+        perfRatingsMap.set(empId, row);
+      }
+    });
+    
     // Build data table
     const headerRow = [
       "Emp ID", "Emp Name", "Start Date", "Tenure", "Job Title", "Level", "Manager", 
@@ -1757,11 +1779,12 @@ function buildSummarySheet() {
     const dataRows = [];
     const activeEmpIds = Array.from(baseDataMap.keys());
     
-    activeEmpIds.forEach(empId => {
+      activeEmpIds.forEach(empId => {
       const baseRow = baseDataMap.get(empId);
       const fullCompRow = fullCompMap.get(empId);
       const bonusRow = bonusMap.get(empId);
       const perfRow = perfMap.get(empId);
+      const perfRatingsRow = perfRatingsMap.get(empId);
       
       // Emp ID
       const empIdVal = empId;
@@ -1784,27 +1807,49 @@ function buildSummarySheet() {
       const elt = safeCell(baseRow, baseCols.elt);
       const location = safeCell(baseRow, baseCols.location);
       
-      // Ratings (from Performance Report)
+      // AYR 2024 and H1 2025 from Performance Ratings sheet
       let ayrRating = "";
       let h1Rating = "";
+      if (perfRatingsRow) {
+        ayrRating = safeCell(perfRatingsRow, perfRatingsCols.ayr2024);
+        h1Rating = safeCell(perfRatingsRow, perfRatingsCols.h12025);
+      }
+      
+      // Q2/Q3 Rating and Promotion from Performance Report
       let q23Rating = "";
       let promotion = "";
       
       if (perfRow) {
-        // Extract performance and potential ratings
-        const perfVal = getRatingValue(safeCell(perfRow, perfCols.performanceQ23));
-        const potentialVal = getRatingValue(safeCell(perfRow, perfCols.potentialQ23));
-        q23Rating = mapPerformanceRating(perfVal, potentialVal);
+        // Extract performance and potential ratings for Q2/Q3
+        const perfText = safeCell(perfRow, perfCols.performanceQ23);
+        const potentialText = safeCell(perfRow, perfCols.potentialQ23);
         
-        // Extract promotion status
-        const promoText = safeCell(perfRow, perfCols.promotionQ1).toLowerCase();
-        if (promoText.includes("ready") || promoText.includes("yes")) {
-          promotion = "Ready";
-        } else if (promoText.includes("uncertain")) {
-          promotion = "Uncertain";
+        if (perfText && potentialText) {
+          const perfVal = getRatingValue(perfText);
+          const potentialVal = getRatingValue(potentialText);
+          q23Rating = mapPerformanceRating(perfVal, potentialVal);
+        }
+        
+        // Extract promotion status - check for actual values
+        const promoText = safeCell(perfRow, perfCols.promotionQ1);
+        if (promoText) {
+          const promoLower = promoText.toLowerCase();
+          // Check for "Ready" first (most specific)
+          if (promoLower.includes("ready") && !promoLower.includes("not ready")) {
+            promotion = "Ready";
+          } else if (promoLower.includes("uncertain")) {
+            promotion = "Uncertain";
+          } else if (promoLower.includes("not ready") || promoLower.includes("no")) {
+            promotion = "Not Ready";
+          } else {
+            // Default to Not Ready if unclear
+            promotion = "Not Ready";
+          }
         } else {
           promotion = "Not Ready";
         }
+      } else {
+        promotion = "Not Ready";
       }
       
       // Last Promotion Date, Last Increase Date, Last Increase %, Change Reason
@@ -1826,19 +1871,29 @@ function buildSummarySheet() {
       const fxRate = getFXRate(location);
       const baseSalaryUSD = isFinite(baseSalaryNum) && fxRate ? baseSalaryNum * fxRate : "";
       
-      // Variable Type and Variable %
-      let variableType = safeCell(baseRow, baseCols.variableType);
-      let variablePct = safeCell(baseRow, baseCols.variablePct);
+      // Variable Type and Variable % - prefer Bonus History over Base Data
+      let variableType = "";
+      let variablePct = "";
       
+      // Try Bonus History first
       if (bonusRow) {
-        const bonusVarType = safeCell(bonusRow, bonusCols.variableType);
-        const bonusVarPct = safeCell(bonusRow, bonusCols.variablePct);
-        if (bonusVarType) variableType = bonusVarType;
-        if (bonusVarPct) variablePct = bonusVarPct;
+        variableType = safeCell(bonusRow, bonusCols.variableType);
+        variablePct = safeCell(bonusRow, bonusCols.variablePct);
       }
       
-      // Notice Period
-      const noticePeriod = safeCell(baseRow, baseCols.noticePeriod);
+      // Fallback to Base Data if not found in Bonus History
+      if (!variableType && baseCols.variableType >= 0) {
+        variableType = safeCell(baseRow, baseCols.variableType);
+      }
+      if (!variablePct && baseCols.variablePct >= 0) {
+        variablePct = safeCell(baseRow, baseCols.variablePct);
+      }
+      
+      // Notice Period from Base Data
+      let noticePeriod = "";
+      if (baseCols.noticePeriod >= 0) {
+        noticePeriod = safeCell(baseRow, baseCols.noticePeriod);
+      }
       
       dataRows.push([
         empIdVal, empName, startDate, tenure, jobTitle, level, manager, department, elt, location,
@@ -1879,35 +1934,108 @@ function buildSummarySheet() {
       // Emp ID as text
       summarySheet.getRange(startRow + 1, empIdCol, dataRows.length, 1).setNumberFormat("@");
       
-      // Dates
-      summarySheet.getRange(startRow + 1, startDateCol, dataRows.length, 1).setNumberFormat("dd-mmm-yy");
+      // Dates - format as dates, not text
+      if (startDateCol > 0) {
+        const startDateRange = summarySheet.getRange(startRow + 1, startDateCol, dataRows.length, 1);
+        startDateRange.setNumberFormat("dd-mmm-yy");
+        // Convert date strings to actual date values
+        const startDateValues = startDateRange.getValues();
+        const convertedDates = startDateValues.map(row => {
+          if (row[0] && row[0] instanceof Date) {
+            return [row[0]];
+          } else if (row[0] && typeof row[0] === 'string') {
+            const parsed = new Date(row[0]);
+            return isNaN(parsed.getTime()) ? [""] : [parsed];
+          }
+          return [""];
+        });
+        startDateRange.setValues(convertedDates);
+      }
       if (lastPromoDateCol > 0) {
-        summarySheet.getRange(startRow + 1, lastPromoDateCol, dataRows.length, 1).setNumberFormat("dd-mmm-yy");
+        const promoDateRange = summarySheet.getRange(startRow + 1, lastPromoDateCol, dataRows.length, 1);
+        promoDateRange.setNumberFormat("dd-mmm-yy");
+        // Convert date strings to actual date values
+        const promoDateValues = promoDateRange.getValues();
+        const convertedPromoDates = promoDateValues.map(row => {
+          if (row[0] && row[0] instanceof Date) {
+            return [row[0]];
+          } else if (row[0] && typeof row[0] === 'string' && row[0].trim()) {
+            const parsed = new Date(row[0]);
+            return isNaN(parsed.getTime()) ? [""] : [parsed];
+          }
+          return [""];
+        });
+        promoDateRange.setValues(convertedPromoDates);
       }
       if (lastIncreaseDateCol > 0) {
-        summarySheet.getRange(startRow + 1, lastIncreaseDateCol, dataRows.length, 1).setNumberFormat("dd-mmm-yy");
+        const increaseDateRange = summarySheet.getRange(startRow + 1, lastIncreaseDateCol, dataRows.length, 1);
+        increaseDateRange.setNumberFormat("dd-mmm-yy");
+        // Convert date strings to actual date values
+        const increaseDateValues = increaseDateRange.getValues();
+        const convertedIncreaseDates = increaseDateValues.map(row => {
+          if (row[0] && row[0] instanceof Date) {
+            return [row[0]];
+          } else if (row[0] && typeof row[0] === 'string' && row[0].trim()) {
+            const parsed = new Date(row[0]);
+            return isNaN(parsed.getTime()) ? [""] : [parsed];
+          }
+          return [""];
+        });
+        increaseDateRange.setValues(convertedIncreaseDates);
       }
       
-      // Percentages
+      // Percentages - ensure they're numbers
       if (lastIncreasePctCol > 0) {
-        summarySheet.getRange(startRow + 1, lastIncreasePctCol, dataRows.length, 1).setNumberFormat("0.00");
+        const pctRange = summarySheet.getRange(startRow + 1, lastIncreasePctCol, dataRows.length, 1);
+        pctRange.setNumberFormat("0.00");
+        const pctValues = pctRange.getValues();
+        const convertedPcts = pctValues.map(row => {
+          if (row[0] === "" || row[0] == null) return [""];
+          const num = toNumberSafe(row[0]);
+          return isFinite(num) ? [num] : [""];
+        });
+        pctRange.setValues(convertedPcts);
       }
       if (variablePctCol > 0) {
-        summarySheet.getRange(startRow + 1, variablePctCol, dataRows.length, 1).setNumberFormat("0.00");
+        const varPctRange = summarySheet.getRange(startRow + 1, variablePctCol, dataRows.length, 1);
+        varPctRange.setNumberFormat("0.00");
+        const varPctValues = varPctRange.getValues();
+        const convertedVarPcts = varPctValues.map(row => {
+          if (row[0] === "" || row[0] == null) return [""];
+          const num = toNumberSafe(row[0]);
+          return isFinite(num) ? [num] : [""];
+        });
+        varPctRange.setValues(convertedVarPcts);
       }
       
-      // Currency
+      // Currency - ensure they're numbers
       if (baseSalaryCol > 0) {
-        summarySheet.getRange(startRow + 1, baseSalaryCol, dataRows.length, 1).setNumberFormat("#,##0");
+        const salaryRange = summarySheet.getRange(startRow + 1, baseSalaryCol, dataRows.length, 1);
+        salaryRange.setNumberFormat("#,##0");
+        const salaryValues = salaryRange.getValues();
+        const convertedSalaries = salaryValues.map(row => {
+          if (row[0] === "" || row[0] == null) return [""];
+          const num = toNumberSafe(row[0]);
+          return isFinite(num) ? [num] : [""];
+        });
+        salaryRange.setValues(convertedSalaries);
       }
       if (baseSalaryUSDCol > 0) {
-        summarySheet.getRange(startRow + 1, baseSalaryUSDCol, dataRows.length, 1).setNumberFormat("$#,##0.00");
+        const usdRange = summarySheet.getRange(startRow + 1, baseSalaryUSDCol, dataRows.length, 1);
+        usdRange.setNumberFormat("$#,##0.00");
+        const usdValues = usdRange.getValues();
+        const convertedUSD = usdValues.map(row => {
+          if (row[0] === "" || row[0] == null) return [""];
+          const num = toNumberSafe(row[0]);
+          return isFinite(num) ? [num] : [""];
+        });
+        usdRange.setValues(convertedUSD);
       }
     }
     
-    // Add helper column in column AH (34) for SUBTOTAL
+    // Add helper column in column AH (34) for SUBTOTAL - based on Employee ID (column A), not Rating
     const helperCol = 34;
-    const helperFormulas = dataRows.map((_, i) => [`=SUBTOTAL(103,$M${startRow + 1 + i})`]);
+    const helperFormulas = dataRows.map((_, i) => [`=SUBTOTAL(103,$A${startRow + 1 + i})`]);
     summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1).setFormulas(helperFormulas);
     
     // Create slicers (rows 4-15) - will use Sheets API if available
@@ -2039,8 +2167,11 @@ function createSlicers(sheet, numRows, dataStartRow) {
     const sheetId = sheet.getSheetId();
     
     // Slicer configuration: {col, sourceRange, title, color, position}
+    // Column mapping: A=1 (Emp ID), B=2 (Emp Name), C=3 (Start Date), D=4 (Tenure), E=5 (Job Title), 
+    // F=6 (Level), G=7 (Manager), H=8 (Department), I=9 (ELT), J=10 (Location), K=11 (AYR), 
+    // L=12 (H1), M=13 (Q2/Q3), N=14 (Promotion), etc.
     const slicers = [
-      {col: 1, range: `A${dataStartRow + 1}:A${dataStartRow + numRows}`, title: "ELT", color: "#9825ff", row: 4, colPos: 1},
+      {col: 9, range: `I${dataStartRow + 1}:I${dataStartRow + numRows}`, title: "ELT", color: "#9825ff", row: 4, colPos: 1},
       {col: 6, range: `F${dataStartRow + 1}:F${dataStartRow + numRows}`, title: "Level", color: "#9825ff", row: 4, colPos: 2},
       {col: 4, range: `D${dataStartRow + 1}:D${dataStartRow + numRows}`, title: "Tenure", color: "#9825ff", row: 4, colPos: 3},
       {col: 8, range: `H${dataStartRow + 1}:H${dataStartRow + numRows}`, title: "Department", color: "#9825ff", row: 4, colPos: 4},
@@ -2124,7 +2255,7 @@ function createSlicers(sheet, numRows, dataStartRow) {
     }
   } catch (error) {
     Logger.log(`Error creating slicers: ${error.message}`);
-    // Fallback to placeholder cells
+    // Fallback to placeholder cells - using correct column positions
     const slicers = [
       {row: 4, col: 1, title: "ELT", color: "#9825ff"},
       {row: 4, col: 2, title: "Level", color: "#9825ff"},
@@ -2182,7 +2313,8 @@ function buildChartData(sheet, dataRows, dataStartRow, helperCol) {
     const ratingCell = sheet.getRange(row, chartStartCol);
     ratingCell.setValue(rating);
     
-    // Count formula using SUMPRODUCT with helper column
+    // Count formula using SUMPRODUCT with helper column (helper column is based on Emp ID, not Rating)
+    // Rating column is M (13), helper column is AH (34)
     const countFormula = `=SUMPRODUCT(($M${dataStartRow + 1}:$M${dataStartRow + dataRows.length}="${rating}")*($AH${dataStartRow + 1}:$AH${dataStartRow + dataRows.length}))`;
     sheet.getRange(row, chartStartCol + 1).setFormula(countFormula);
     
