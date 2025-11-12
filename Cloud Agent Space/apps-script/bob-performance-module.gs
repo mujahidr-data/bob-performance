@@ -26,7 +26,8 @@ const BOB_REPORT_IDS = {
   BASE_DATA: "31048356",
   BONUS_HISTORY: "31054302",
   COMP_HISTORY: "31054312",
-  FULL_COMP_HISTORY: "31168524"
+  FULL_COMP_HISTORY: "31168524",
+  PERF_RATINGS: "31172066"
 };
 
 const SHEET_NAMES = {
@@ -34,6 +35,7 @@ const SHEET_NAMES = {
   BONUS_HISTORY: "Bonus History",
   COMP_HISTORY: "Comp History",
   FULL_COMP_HISTORY: "Full Comp History",
+  PERF_RATINGS: "Performance Ratings",
   PERF_REPORT: "Bob Perf Report"
 };
 
@@ -62,6 +64,7 @@ function onOpen() {
     .addItem('Import Bonus History', 'importBobBonusHistoryLatest')
     .addItem('Import Compensation History', 'importBobCompHistoryLatest')
     .addItem('Import Full Comp History', 'importBobFullCompHistory')
+    .addItem('Import Performance Ratings', 'importBobPerformanceRatings')
     .addSeparator()
     .addItem('Import All Data', 'importAllBobData')
     .addSeparator()
@@ -90,7 +93,7 @@ function importAllBobData() {
     const ui = SpreadsheetApp.getUi();
     const response = ui.alert(
       'Import All Data',
-      'This will import Base Data, Bonus History, and Compensation History. This may take a few minutes. Continue?',
+      'This will import Base Data, Bonus History, Compensation History, Full Comp History, and Performance Ratings. This may take a few minutes. Continue?',
       ui.ButtonSet.YES_NO
     );
     
@@ -562,6 +565,47 @@ function importBobFullCompHistory() {
   } catch (error) {
     Logger.log(`Error in importBobFullCompHistory: ${error.message}`);
     SpreadsheetApp.getUi().alert(`Error importing Full Comp History: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Imports historical performance ratings from Bob API
+ */
+function importBobPerformanceRatings() {
+  try {
+    const reportId = BOB_REPORT_IDS.PERF_RATINGS;
+    const targetSheetName = SHEET_NAMES.PERF_RATINGS;
+    
+    Logger.log(`Starting import of ${targetSheetName}...`);
+    const rows = fetchBobReport(reportId);
+    
+    if (!rows || rows.length === 0) {
+      throw new Error("No data returned from report");
+    }
+    
+    // Use the header from the report
+    const header = rows[0];
+    
+    // Import all rows as-is (no transformation needed for performance ratings)
+    const out = [header];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (row && row.length > 0) {
+        out.push(row);
+      }
+    }
+    
+    // Write to sheet with formatting
+    writeToSheet(targetSheetName, out, [
+      // Format date columns if they exist (will be detected automatically)
+    ]);
+    
+    Logger.log(`Successfully imported ${targetSheetName} - ${out.length - 1} rows`);
+    SpreadsheetApp.getUi().alert(`Successfully imported ${out.length - 1} performance rating records to ${targetSheetName}`);
+  } catch (error) {
+    Logger.log(`Error in importBobPerformanceRatings: ${error.message}`);
+    SpreadsheetApp.getUi().alert(`Error importing Performance Ratings: ${error.message}`);
     throw error;
   }
 }
