@@ -1119,14 +1119,9 @@ class HiBobReportDownloader:
                 ).execute()
             else:
                 print(f"   ✓ Found existing sheet: {SHEET_NAME}")
-                # Clear existing data
-                range_name = f"{SHEET_NAME}!A1:Z10000"
-                service.spreadsheets().values().clear(
-                    spreadsheetId=SPREADSHEET_ID,
-                    range=range_name
-                ).execute()
+                print(f"   ℹ️  Pasting values (preserving existing formatting)...")
             
-            # Write data to sheet
+            # Write data to sheet - paste values only, preserve formatting
             print(f"   ✍️  Writing {len(data)} rows to sheet...")
             range_name = f"{SHEET_NAME}!A1"
             
@@ -1175,44 +1170,33 @@ class HiBobReportDownloader:
                     sheet_id = sheet['properties']['sheetId']
                     break
             
+            # Skip formatting - preserve existing sheet formatting
             if sheet_id is not None:
-                requests = [
-                    {
-                        'repeatCell': {
-                            'range': {
-                                'sheetId': sheet_id,
-                                'startRowIndex': 0,
-                                'endRowIndex': 1
-                            },
-                            'cell': {
-                                'userEnteredFormat': {
-                                    'backgroundColor': {'red': 0.26, 'green': 0.52, 'blue': 0.96},
-                                    'textFormat': {
-                                        'foregroundColor': {'red': 1.0, 'green': 1.0, 'blue': 1.0},
-                                        'bold': True
+                print(f"   ℹ️  Skipping formatting (preserving existing)")
+                # Only freeze header row if not already frozen
+                try:
+                    requests = [
+                        {
+                            'updateSheetProperties': {
+                                'properties': {
+                                    'sheetId': sheet_id,
+                                    'gridProperties': {
+                                        'frozenRowCount': 1
                                     }
-                                }
-                            },
-                            'fields': 'userEnteredFormat(backgroundColor,textFormat)'
+                                },
+                                'fields': 'gridProperties.frozenRowCount'
+                            }
                         }
-                    },
-                    {
-                        'updateSheetProperties': {
-                            'properties': {
-                                'sheetId': sheet_id,
-                                'gridProperties': {
-                                    'frozenRowCount': 1
-                                }
-                            },
-                            'fields': 'gridProperties.frozenRowCount'
-                        }
-                    }
-                ]
-                
-                service.spreadsheets().batchUpdate(
-                    spreadsheetId=SPREADSHEET_ID,
-                    body={'requests': requests}
-                ).execute()
+                    ]
+                    
+                    service.spreadsheets().batchUpdate(
+                        spreadsheetId=SPREADSHEET_ID,
+                        body={'requests': requests}
+                    ).execute()
+                    print(f"   ✓ Frozen header row")
+                except Exception as e:
+                    # Ignore if already frozen or error
+                    print(f"   ℹ️  Header row already frozen or error: {str(e)}")
             
             print(f"✅ Successfully uploaded to Google Sheets!")
             print(f"   📊 Updated {updated_rows} rows, {updated_cells} cells")
