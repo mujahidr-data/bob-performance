@@ -95,95 +95,76 @@ class WebHiBobDownloader(HiBobReportDownloader):
         print(f"[{status.upper()}] {message}")
     
     def start_browser(self):
-        """Start browser (try Chromium, system Chrome, then Firefox) for web interface"""
+        """Start browser (try Safari, Chrome, Firefox - prefer visible if headless fails)"""
         self.log("🌐 Starting browser...", 'info')
         try:
             from playwright.sync_api import sync_playwright
             
             self.playwright = sync_playwright().start()
             
-            # Try multiple browsers and launch strategies for macOS compatibility
+            # Try multiple browsers - if headless fails, try visible mode
             browser_launched = False
             launch_errors = []
             browser_type_used = None
             
-            # ===== CHROMIUM STRATEGIES =====
-            # Strategy 1: Try system Chrome (more stable on macOS)
-            try:
-                self.log("   Attempting system Chrome (headless)...", 'info')
-                self.browser = self.playwright.chromium.launch(
-                    channel="chrome",  # Use system Chrome if available
-                    headless=True
-                )
-                browser_launched = True
-                browser_type_used = "Chrome (system)"
-                self.log("   ✅ System Chrome launch successful", 'success')
-            except Exception as e:
-                launch_errors.append(f"System Chrome: {str(e)[:100]}")
-                self.log(f"   ⚠️  System Chrome not available: {str(e)[:100]}", 'warning')
+            browsers_to_try = [
+                # (browser_name, browser_type, channel, description)
+                ("Safari", "webkit", None, "Safari (system)"),
+                ("Chrome", "chromium", "chrome", "Chrome (system)"),
+                ("Firefox", "firefox", None, "Firefox"),
+                ("Chromium", "chromium", None, "Chromium (bundled)"),
+            ]
             
-            # Strategy 2: Try Chromium headless with args
-            if not browser_launched:
+            # Try each browser: first headless, then visible if headless fails
+            for browser_name, browser_type, channel, description in browsers_to_try:
+                if browser_launched:
+                    break
+                
+                # Try headless first
                 try:
-                    self.log("   Attempting Chromium headless with args...", 'info')
-                    self.browser = self.playwright.chromium.launch(
-                        headless=True,
-                        args=[
-                            '--disable-dev-shm-usage',
-                            '--no-sandbox',
-                            '--disable-gpu',
-                            '--disable-software-rasterizer'
-                        ]
-                    )
+                    self.log(f"   Attempting {description} (headless)...", 'info')
+                    browser_launcher = getattr(self.playwright, browser_type)
+                    launch_kwargs = {"headless": True}
+                    if channel:
+                        launch_kwargs["channel"] = channel
+                    if browser_type == "chromium" and not channel:
+                        launch_kwargs["args"] = ['--disable-dev-shm-usage', '--no-sandbox']
+                    
+                    self.browser = browser_launcher.launch(**launch_kwargs)
                     browser_launched = True
-                    browser_type_used = "Chromium (headless)"
-                    self.log("   ✅ Chromium headless launch successful", 'success')
+                    browser_type_used = f"{description} (headless)"
+                    self.log(f"   ✅ {description} headless launch successful", 'success')
                 except Exception as e:
-                    launch_errors.append(f"Chromium headless: {str(e)[:100]}")
-                    self.log(f"   ⚠️  Chromium headless failed: {str(e)[:100]}", 'warning')
-            
-            # Strategy 3: Try Chromium visible (more stable on macOS)
-            if not browser_launched:
-                try:
-                    self.log("   Attempting Chromium visible (fallback)...", 'info')
-                    self.browser = self.playwright.chromium.launch(
-                        headless=False,
-                        args=[
-                            '--disable-dev-shm-usage',
-                            '--no-sandbox'
-                        ]
-                    )
-                    browser_launched = True
-                    browser_type_used = "Chromium (visible)"
-                    self.log("   ✅ Chromium visible launch successful", 'success')
-                except Exception as e:
-                    launch_errors.append(f"Chromium visible: {str(e)[:100]}")
-                    self.log(f"   ⚠️  Chromium visible failed: {str(e)[:100]}", 'warning')
-            
-            # ===== FIREFOX FALLBACK =====
-            # Strategy 4: Try Firefox (often more stable on macOS)
-            if not browser_launched:
-                try:
-                    self.log("   Attempting Firefox (alternative browser)...", 'info')
-                    self.browser = self.playwright.firefox.launch(
-                        headless=True
-                    )
-                    browser_launched = True
-                    browser_type_used = "Firefox"
-                    self.log("   ✅ Firefox launch successful", 'success')
-                except Exception as e:
-                    launch_errors.append(f"Firefox: {str(e)[:100]}")
-                    self.log(f"   ⚠️  Firefox not available: {str(e)[:100]}", 'warning')
-                    self.log("   💡 Install Firefox: python3 -m playwright install firefox", 'info')
+                    error_msg = str(e)[:100]
+                    launch_errors.append(f"{description} headless: {error_msg}")
+                    self.log(f"   ⚠️  {description} headless failed: {error_msg}", 'warning')
+                    
+                    # If headless failed, try visible mode immediately
+                    try:
+                        self.log(f"   Attempting {description} (visible - opening browser window)...", 'info')
+                        browser_launcher = getattr(self.playwright, browser_type)
+                        launch_kwargs = {"headless": False}
+                        if channel:
+                            launch_kwargs["channel"] = channel
+                        if browser_type == "chromium" and not channel:
+                            launch_kwargs["args"] = ['--disable-dev-shm-usage', '--no-sandbox']
+                        
+                        self.browser = browser_launcher.launch(**launch_kwargs)
+                        browser_launched = True
+                        browser_type_used = f"{description} (visible)"
+                        self.log(f"   ✅ {description} visible launch successful - browser window will open", 'success')
+                    except Exception as e2:
+                        error_msg2 = str(e2)[:100]
+                        launch_errors.append(f"{description} visible: {error_msg2}")
+                        self.log(f"   ⚠️  {description} visible also failed: {error_msg2}", 'warning')
             
             if not browser_launched:
                 error_msg = f"❌ All browser launch strategies failed ({len(launch_errors)} attempts)\n"
-                error_msg += "\n".join(f"  • {e}" for e in launch_errors[:5])  # Show first 5 errors
+                error_msg += "\n".join(f"  • {e}" for e in launch_errors[:8])  # Show first 8 errors
                 error_msg += "\n\n💡 Solutions:\n"
                 error_msg += "  1. Check macOS permissions: System Settings > Privacy & Security\n"
-                error_msg += "  2. Reinstall browsers: python3 -m playwright install chromium firefox\n"
-                error_msg += "  3. Update Playwright: pip3 install --upgrade playwright\n"
-                error_msg += "  4. Try Firefox: python3 -m playwright install firefox"
+                error_msg += "  2. Install browsers: python3 -m playwright install webkit chromium firefox\n"
+                error_msg += "  3. Update Playwright: pip3 install --upgrade playwright"
                 self.log(error_msg, 'error')
                 raise Exception(f"Failed to start browser. Tried {len(launch_errors)} strategies.")
             
