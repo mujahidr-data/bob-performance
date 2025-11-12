@@ -267,14 +267,25 @@ class ManagerBlurbGenerator:
             is_valid_semantic, semantic_reason, confidence = self._validate_semantic_coherence(blurb, emp_name)
             
             if not is_valid_semantic:
+                # Hybrid validation: If semantic confidence is borderline (30-39%)
+                # but rule-based passed, accept it
+                if confidence >= 0.30 and confidence < 0.40 and is_valid_rules:
+                    print(f"       ℹ️  Hybrid validation: Low semantic ({confidence:.2f}) but passed rules - accepting")
+                    return blurb
+                
                 print(f"       ⚠️  Semantic QA failed ({semantic_reason}), using fallback")
                 fallback = self._simple_extract(feedback_text)
                 
-                # Validate fallback semantically
-                is_valid_fallback_semantic, _, _ = self._validate_semantic_coherence(fallback, emp_name)
+                # Validate fallback with both rules and semantic
                 is_valid_fallback_rules, _ = self._validate_blurb_quality(fallback, emp_name)
+                is_valid_fallback_semantic, _, fallback_confidence = self._validate_semantic_coherence(fallback, emp_name)
                 
+                # Accept fallback if it passes rules OR has better semantic score
                 if is_valid_fallback_semantic and is_valid_fallback_rules:
+                    return fallback
+                elif is_valid_fallback_rules and fallback_confidence >= 0.30:
+                    # Hybrid for fallback too
+                    print(f"       ℹ️  Fallback hybrid validation: Low semantic ({fallback_confidence:.2f}) but passed rules")
                     return fallback
                 else:
                     return "Performance feedback available; requires manual review for summary"
@@ -289,9 +300,13 @@ class ManagerBlurbGenerator:
             
             # Validate fallback (both rules and semantic)
             is_valid_rules, _ = self._validate_blurb_quality(fallback, emp_name)
-            is_valid_semantic, _, _ = self._validate_semantic_coherence(fallback, emp_name)
+            is_valid_semantic, _, confidence = self._validate_semantic_coherence(fallback, emp_name)
             
+            # Accept if both pass, OR if rules pass with borderline semantic (30%+)
             if is_valid_rules and is_valid_semantic:
+                return fallback
+            elif is_valid_rules and confidence >= 0.30:
+                print(f"       ℹ️  Exception fallback hybrid: Low semantic ({confidence:.2f}) but passed rules")
                 return fallback
             else:
                 return "Performance feedback available; requires manual review for summary"
@@ -371,9 +386,10 @@ class ManagerBlurbGenerator:
         if not has_keyword:
             return False, "No performance-related keywords found"
         
-        # Check 5: Word count should be reasonable (30-80 words)
+        # Check 5: Word count should be reasonable (25-85 words)
+        # Lowered from 30 to 25 to accept concise but meaningful feedback
         word_count = len(blurb_clean.split())
-        if word_count < 30:
+        if word_count < 25:
             return False, f"Too short ({word_count} words)"
         if word_count > 85:
             return False, f"Too long ({word_count} words)"
@@ -441,12 +457,21 @@ class ManagerBlurbGenerator:
             ]
             
             if top_label in performance_labels:
-                if top_score >= 0.5:  # High confidence it's a performance review
+                # Lowered threshold from 0.5 to 0.4 for more lenient validation
+                if top_score >= 0.40:  # Moderate confidence it's a performance review
                     return True, f"Semantic: {top_label}", top_score
-                else:
+                elif top_score >= 0.30:
+                    # Low confidence - will be accepted if rule-based QA passes
                     return False, f"Low confidence ({top_score:.2f}) for performance review", top_score
+                else:
+                    # Very low confidence - reject
+                    return False, f"Very low confidence ({top_score:.2f}) for performance review", top_score
             else:
                 # Top prediction is NOT performance-related
+                # But if score is close and it's not clearly "gibberish" or "news", give it a chance
+                if top_label in ["random unrelated text", "gibberish or nonsense", "news article or website content"]:
+                    if top_score < 0.45:  # Not very confident it's bad content
+                        return False, f"Semantic: Low confidence '{top_label}' ({top_score:.2f}), borderline", top_score
                 return False, f"Semantic: Detected as '{top_label}' ({top_score:.2f})", top_score
         
         except Exception as e:
@@ -481,13 +506,13 @@ class ManagerBlurbGenerator:
             
             words_in_sentence = len(sentence.split())
             
-            # Ensure we get at least 30 words total
+            # Ensure we get at least 25 words total (lowered from 30)
             if word_count + words_in_sentence <= 70:
                 selected.append(sentence)
                 word_count += words_in_sentence
                 
-                # Stop if we have enough
-                if word_count >= 40 and len(selected) >= 2:
+                # Stop if we have enough (lowered from 40 to 35)
+                if word_count >= 35 and len(selected) >= 2:
                     break
             else:
                 break
