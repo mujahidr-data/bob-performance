@@ -2022,26 +2022,16 @@ function buildSummarySheet() {
     
     // Add helper column in column AH (34) for SUBTOTAL - based on Employee ID (column A), not Rating
     const helperCol = 34;
-    const helperFormulas = dataRows.map((_, i) => [`=SUBTOTAL(103,$A${startRow + 1 + i})`]);
-    summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1).setFormulas(helperFormulas);
+    if (dataRows.length > 0) {
+      const helperFormulas = dataRows.map((_, i) => [`=SUBTOTAL(103,$A${startRow + 1 + i})`]);
+      summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1).setFormulas(helperFormulas);
+      
+      // Update chart data formulas with dynamic ranges
+      updateChartDataFormulas(summarySheet, dataRows.length, startRow, helperCol);
+    }
     
-    // Create slicers (rows 4-15) - will use Sheets API if available
-    createSlicers(summarySheet, dataRows.length, startRow);
-    
-    // Build chart data and create chart - will use Sheets API if available
-    buildChartData(summarySheet, dataRows, startRow, helperCol);
-    
-    // Apply conditional formatting
-    applyConditionalFormatting(summarySheet, dataRows.length, startRow);
-    
-    // Auto-resize columns
-    summarySheet.autoResizeColumns(1, headerRow.length);
-    
-    // Freeze header row
-    summarySheet.setFrozenRows(startRow);
-    
-    Logger.log(`Summary sheet built successfully with ${dataRows.length} employees`);
-    SpreadsheetApp.getUi().alert("Success", `Summary sheet built successfully with ${dataRows.length} employees`, SpreadsheetApp.getUi().ButtonSet.OK);
+    Logger.log(`Summary sheet updated successfully with ${dataRows.length} employees`);
+    SpreadsheetApp.getUi().alert("Success", `Summary sheet updated successfully with ${dataRows.length} employees`, SpreadsheetApp.getUi().ButtonSet.OK);
     
   } catch (error) {
     Logger.log(`Error building Summary sheet: ${error.message}`);
@@ -2277,32 +2267,30 @@ function createSlicerPlaceholders(sheet, slicers) {
 }
 
 /**
- * Build chart data and create chart for rating distribution
+ * Update chart data formulas with dynamic ranges
  */
-function buildChartData(sheet, dataRows, dataStartRow, helperCol) {
+function updateChartDataFormulas(sheet, numDataRows, dataStartRow, helperCol) {
   // Rating column is M (13), helper column is AH (34)
   const ratingCol = 13; // Q2/Q3 Rating
   
-  // Count ratings - will use formulas that reference helper column
+  // Count ratings
   const ratings = ["HH", "HM", "MH", "MM", "ML", "NI"];
   
-  // Write chart data with formulas for count and percentage
   // Chart data starts around row 1, column F (6)
   const chartStartRow = 1;
   const chartStartCol = 6; // Column F
   
-  const chartHeaders = ["Rating", "Count", "%", "Label"];
-  sheet.getRange(chartStartRow, chartStartCol, 1, 4).setValues([chartHeaders]);
+  // Calculate the last data row
+  const lastDataRow = dataStartRow + numDataRows;
   
-  // Write rating values and formulas
+  // Update count formulas for each rating
   ratings.forEach((rating, idx) => {
     const row = chartStartRow + 1 + idx;
-    const ratingCell = sheet.getRange(row, chartStartCol);
-    ratingCell.setValue(rating);
     
-    // Count formula using SUMPRODUCT with helper column (helper column is based on Emp ID, not Rating)
-    // Rating column is M (13), helper column is AH (34)
-    const countFormula = `=SUMPRODUCT(($M${dataStartRow + 1}:$M${dataStartRow + dataRows.length}="${rating}")*($AH${dataStartRow + 1}:$AH${dataStartRow + dataRows.length}))`;
+    // Count formula using SUMPRODUCT with dynamic ranges
+    // Formula: =SUMPRODUCT(($AH$21:$AH$390=1)*($M$21:$M$390=H2))
+    // But with dynamic ranges based on actual data
+    const countFormula = `=SUMPRODUCT(($AH$${dataStartRow + 1}:$AH$${lastDataRow}=1)*($M$${dataStartRow + 1}:$M$${lastDataRow}=$F${row + 1}))`;
     sheet.getRange(row, chartStartCol + 1).setFormula(countFormula);
     
     // Percentage formula - count divided by total of all counts
@@ -2316,10 +2304,7 @@ function buildChartData(sheet, dataRows, dataStartRow, helperCol) {
   });
   
   // Employee count in I17
-  sheet.getRange(17, 9).setFormula(`=COUNTIF(AH${dataStartRow + 1}:AH${dataStartRow + dataRows.length}, 1)`);
-  
-  // Create the chart using Charts API
-  createRatingDistributionChart(sheet, chartStartRow, chartStartCol, ratings.length, dataStartRow);
+  sheet.getRange(17, 9).setFormula(`=COUNTIF(AH$${dataStartRow + 1}:AH$${lastDataRow}, 1)`);
 }
 
 /**
