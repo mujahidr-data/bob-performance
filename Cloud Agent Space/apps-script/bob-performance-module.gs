@@ -522,7 +522,7 @@ function importBobFullCompHistory() {
       });
     });
     
-    const outHeader = ["Emp ID", "Emp Name", "Last Promotion Date", "Last Increase %", "Change Reason"];
+    const outHeader = ["Emp ID", "Emp Name", "Last Promotion Date", "Last Increase Date", "Last Increase %", "Change Reason"];
     const out = [outHeader];
     
     employees.forEach((employee, empId) => {
@@ -535,7 +535,7 @@ function importBobFullCompHistory() {
         if (ymd) promotionDate = parseDateSmart(ymd);
       }
       
-      let lastIncreasePct = "", changeReason = "";
+      let lastIncreaseDate = "", lastIncreasePct = "", changeReason = "";
       const history = compHistory.get(empId);
       
       if (history && history.length >= 2) {
@@ -552,16 +552,21 @@ function importBobFullCompHistory() {
           if (increasePct >= 0) {
             lastIncreasePct = increasePct.toFixed(2);
             changeReason = lastEntry.reason || "";
+            // Get the date of the increase (effective date of the last entry)
+            if (lastEntry.ymd) {
+              lastIncreaseDate = parseDateSmart(lastEntry.ymd);
+            }
           }
         }
       }
       
-      out.push([empId, employee.name, promotionDate, lastIncreasePct, changeReason]);
+      out.push([empId, employee.name, promotionDate, lastIncreaseDate, lastIncreasePct, changeReason]);
     });
     
     writeToSheet(targetSheetName, out, [
-      { range: [2, 3], format: "yyyy-mm-dd" },
-      { range: [2, 4], format: "0.00" }
+      { range: [2, 3], format: "yyyy-mm-dd" },  // Last Promotion Date
+      { range: [2, 4], format: "yyyy-mm-dd" },  // Last Increase Date
+      { range: [2, 5], format: "0.00" }         // Last Increase %
     ]);
     
     Logger.log(`Successfully imported ${targetSheetName} - ${out.length - 1} employees, ${promotions.size} with promotion dates`);
