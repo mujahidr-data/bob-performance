@@ -95,50 +95,57 @@ class WebHiBobDownloader(HiBobReportDownloader):
         print(f"[{status.upper()}] {message}")
     
     def start_browser(self):
-        """Start browser (prefer headless, fallback to visible) for web interface"""
+        """Start browser (try Chromium, system Chrome, then Firefox) for web interface"""
         self.log("🌐 Starting browser...", 'info')
         try:
             from playwright.sync_api import sync_playwright
             
             self.playwright = sync_playwright().start()
             
-            # Try multiple launch strategies for macOS compatibility
+            # Try multiple browsers and launch strategies for macOS compatibility
             browser_launched = False
             launch_errors = []
+            browser_type_used = None
             
-            # Strategy 1: Try headless with args (preferred for background)
+            # ===== CHROMIUM STRATEGIES =====
+            # Strategy 1: Try system Chrome (more stable on macOS)
             try:
-                self.log("   Attempting headless launch with args...", 'info')
+                self.log("   Attempting system Chrome (headless)...", 'info')
                 self.browser = self.playwright.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--disable-dev-shm-usage',
-                        '--no-sandbox',
-                        '--disable-gpu',
-                        '--disable-software-rasterizer'
-                    ]
+                    channel="chrome",  # Use system Chrome if available
+                    headless=True
                 )
                 browser_launched = True
-                self.log("   ✅ Headless launch successful", 'success')
+                browser_type_used = "Chrome (system)"
+                self.log("   ✅ System Chrome launch successful", 'success')
             except Exception as e:
-                launch_errors.append(f"Headless with args: {str(e)}")
-                self.log(f"   ⚠️  Headless with args failed: {str(e)}", 'warning')
+                launch_errors.append(f"System Chrome: {str(e)[:100]}")
+                self.log(f"   ⚠️  System Chrome not available: {str(e)[:100]}", 'warning')
             
-            # Strategy 2: Try headless without args
+            # Strategy 2: Try Chromium headless with args
             if not browser_launched:
                 try:
-                    self.log("   Attempting headless launch (minimal)...", 'info')
-                    self.browser = self.playwright.chromium.launch(headless=True)
+                    self.log("   Attempting Chromium headless with args...", 'info')
+                    self.browser = self.playwright.chromium.launch(
+                        headless=True,
+                        args=[
+                            '--disable-dev-shm-usage',
+                            '--no-sandbox',
+                            '--disable-gpu',
+                            '--disable-software-rasterizer'
+                        ]
+                    )
                     browser_launched = True
-                    self.log("   ✅ Headless minimal launch successful", 'success')
+                    browser_type_used = "Chromium (headless)"
+                    self.log("   ✅ Chromium headless launch successful", 'success')
                 except Exception as e:
-                    launch_errors.append(f"Headless minimal: {str(e)}")
-                    self.log(f"   ⚠️  Headless minimal failed: {str(e)}", 'warning')
+                    launch_errors.append(f"Chromium headless: {str(e)[:100]}")
+                    self.log(f"   ⚠️  Chromium headless failed: {str(e)[:100]}", 'warning')
             
-            # Strategy 3: Try non-headless (visible window) - more stable on macOS
+            # Strategy 3: Try Chromium visible (more stable on macOS)
             if not browser_launched:
                 try:
-                    self.log("   Attempting visible launch (fallback)...", 'info')
+                    self.log("   Attempting Chromium visible (fallback)...", 'info')
                     self.browser = self.playwright.chromium.launch(
                         headless=False,
                         args=[
@@ -147,27 +154,41 @@ class WebHiBobDownloader(HiBobReportDownloader):
                         ]
                     )
                     browser_launched = True
-                    self.log("   ✅ Visible launch successful", 'success')
+                    browser_type_used = "Chromium (visible)"
+                    self.log("   ✅ Chromium visible launch successful", 'success')
                 except Exception as e:
-                    launch_errors.append(f"Visible: {str(e)}")
-                    self.log(f"   ⚠️  Visible launch failed: {str(e)}", 'warning')
+                    launch_errors.append(f"Chromium visible: {str(e)[:100]}")
+                    self.log(f"   ⚠️  Chromium visible failed: {str(e)[:100]}", 'warning')
             
-            # Strategy 4: Try with absolute minimum
+            # ===== FIREFOX FALLBACK =====
+            # Strategy 4: Try Firefox (often more stable on macOS)
             if not browser_launched:
                 try:
-                    self.log("   Attempting minimal launch (last resort)...", 'info')
-                    self.browser = self.playwright.chromium.launch()
+                    self.log("   Attempting Firefox (alternative browser)...", 'info')
+                    self.browser = self.playwright.firefox.launch(
+                        headless=True
+                    )
                     browser_launched = True
-                    self.log("   ✅ Minimal launch successful", 'success')
+                    browser_type_used = "Firefox"
+                    self.log("   ✅ Firefox launch successful", 'success')
                 except Exception as e:
-                    launch_errors.append(f"Minimal: {str(e)}")
+                    launch_errors.append(f"Firefox: {str(e)[:100]}")
+                    self.log(f"   ⚠️  Firefox not available: {str(e)[:100]}", 'warning')
+                    self.log("   💡 Install Firefox: python3 -m playwright install firefox", 'info')
             
             if not browser_launched:
-                error_msg = "All browser launch strategies failed:\n" + "\n".join(f"  - {e}" for e in launch_errors)
-                self.log(f"❌ {error_msg}", 'error')
-                raise Exception(f"Failed to start browser. Tried {len(launch_errors)} strategies. Last error: {launch_errors[-1]}")
+                error_msg = f"❌ All browser launch strategies failed ({len(launch_errors)} attempts)\n"
+                error_msg += "\n".join(f"  • {e}" for e in launch_errors[:5])  # Show first 5 errors
+                error_msg += "\n\n💡 Solutions:\n"
+                error_msg += "  1. Check macOS permissions: System Settings > Privacy & Security\n"
+                error_msg += "  2. Reinstall browsers: python3 -m playwright install chromium firefox\n"
+                error_msg += "  3. Update Playwright: pip3 install --upgrade playwright\n"
+                error_msg += "  4. Try Firefox: python3 -m playwright install firefox"
+                self.log(error_msg, 'error')
+                raise Exception(f"Failed to start browser. Tried {len(launch_errors)} strategies.")
             
             # Create context
+            self.log(f"   Using {browser_type_used}", 'info')
             self.context = self.browser.new_context(
                 accept_downloads=True,
                 viewport={'width': 1920, 'height': 1080},
@@ -183,7 +204,7 @@ class WebHiBobDownloader(HiBobReportDownloader):
             # Verify browser is running
             try:
                 self.page.goto("about:blank", timeout=10000)
-                self.log("✅ Browser started and verified successfully", 'success')
+                self.log(f"✅ Browser started and verified successfully ({browser_type_used})", 'success')
             except Exception as e:
                 # Browser started but verification failed - might still work
                 self.log(f"⚠️  Browser verification warning: {str(e)}", 'warning')
