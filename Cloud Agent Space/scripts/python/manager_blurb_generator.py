@@ -186,17 +186,15 @@ class ManagerBlurbGenerator:
         return self._clean_text(combined)
     
     def _generate_blurb(self, feedback_text: str, emp_name: str = "") -> str:
-        """Generate a concise manager blurb using AI"""
+        """Generate a concise manager blurb using AI with QA validation"""
         
         if not feedback_text or len(feedback_text) < 20:
-            return "No feedback available"
+            return "No meaningful feedback available"
         
         # Initialize summarizer if needed
         self._init_summarizer()
         
-        # Prepare prompt for performance-review style
-        # BART works best with clear text, so we'll post-process the output
-        
+        # Try AI summarization first
         try:
             # BART summarization
             max_length = 80  # Words for input to model (will be trimmed to 60)
@@ -220,22 +218,50 @@ class ManagerBlurbGenerator:
             if len(words) > 60:
                 blurb = ' '.join(words[:60]) + '.'
             
-            return blurb
+            # QA validation pass
+            is_valid, reason = self._validate_blurb_quality(blurb, emp_name)
+            
+            if is_valid:
+                return blurb
+            else:
+                # Failed QA - try fallback
+                print(f"       ⚠️  QA failed ({reason}), using fallback extraction")
+                fallback = self._simple_extract(feedback_text)
+                
+                # Validate fallback too
+                is_valid_fallback, _ = self._validate_blurb_quality(fallback, emp_name)
+                if is_valid_fallback:
+                    return fallback
+                else:
+                    # Both failed - return generic message
+                    return "Performance feedback available; requires manual review for summary"
             
         except Exception as e:
-            print(f"   ⚠️  Summarization failed for {emp_name}: {e}")
+            print(f"       ⚠️  Summarization failed for {emp_name}: {e}")
             # Fallback: simple extraction
-            return self._simple_extract(feedback_text)
+            fallback = self._simple_extract(feedback_text)
+            
+            # Validate fallback
+            is_valid, _ = self._validate_blurb_quality(fallback, emp_name)
+            if is_valid:
+                return fallback
+            else:
+                return "Performance feedback available; requires manual review for summary"
     
     def _format_performance_tone(self, text: str) -> str:
         """Format text to performance-review tone"""
+        
+        if not text or len(text.strip()) == 0:
+            return ""
+        
+        text = text.strip()
         
         # Capitalize first letter
         if text:
             text = text[0].upper() + text[1:]
         
         # Ensure ends with period
-        if not text.endswith('.'):
+        if not text.endswith(('.', '!', '?')):
             text += '.'
         
         # Fix common grammar issues
@@ -244,28 +270,131 @@ class ManagerBlurbGenerator:
         
         return text
     
+    def _validate_blurb_quality(self, blurb: str, emp_name: str = "") -> tuple[bool, str]:
+        """
+        QA validation pass for generated blurbs
+        Returns: (is_valid, reason)
+        """
+        
+        if not blurb or len(blurb.strip()) < 20:
+            return False, "Too short"
+        
+        blurb_clean = blurb.strip()
+        
+        # Check 1: Proper capitalization at start
+        if not blurb_clean[0].isupper():
+            return False, "Missing capitalization"
+        
+        # Check 2: Proper ending punctuation
+        if not blurb_clean.endswith(('.', '!', '?')):
+            return False, "Missing ending punctuation"
+        
+        # Check 3: Check for obviously irrelevant content
+        irrelevant_patterns = [
+            r'cnn\.com',
+            r'ireporter',
+            r'travel snapshots',
+            r'gallery\.',
+            r'visi$',  # truncated
+            r'\.com has been hacked',
+            r'http',
+            r'www\.',
+            r'click here',
+            r'subscribe',
+            r'newsletter'
+        ]
+        
+        blurb_lower = blurb_clean.lower()
+        for pattern in irrelevant_patterns:
+            if re.search(pattern, blurb_lower):
+                return False, f"Irrelevant content detected: {pattern}"
+        
+        # Check 4: Must contain at least one performance-related keyword
+        performance_keywords = [
+            'delivered', 'developed', 'demonstrated', 'led', 'managed', 'improved',
+            'needs', 'should', 'opportunity', 'focus', 'strengthen', 'expand',
+            'performance', 'growth', 'impact', 'ownership', 'collaboration',
+            'technical', 'leadership', 'team', 'project', 'product', 'customer',
+            'ready', 'readiness', 'potential', 'promotion', 'ai', 'automation',
+            'thinking', 'execution', 'delivery', 'quality', 'skill', 'ability'
+        ]
+        
+        has_keyword = any(keyword in blurb_lower for keyword in performance_keywords)
+        if not has_keyword:
+            return False, "No performance-related keywords found"
+        
+        # Check 5: Word count should be reasonable (30-80 words)
+        word_count = len(blurb_clean.split())
+        if word_count < 30:
+            return False, f"Too short ({word_count} words)"
+        if word_count > 85:
+            return False, f"Too long ({word_count} words)"
+        
+        # Check 6: Must have at least 2 complete sentences
+        sentences = re.split(r'[.!?]+', blurb_clean)
+        complete_sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
+        if len(complete_sentences) < 2:
+            return False, "Incomplete or single sentence"
+        
+        # Check 7: No obvious mid-sentence truncation (ends with incomplete word)
+        if blurb_clean.endswith('...'):
+            return False, "Truncated with ellipsis"
+        
+        # Check 8: Should not be all lowercase or all uppercase
+        if blurb_clean.islower() or blurb_clean.isupper():
+            return False, "Improper casing"
+        
+        # Check 9: Check for gibberish (too many consecutive consonants or vowels)
+        words = blurb_clean.split()
+        for word in words[:5]:  # Check first 5 words
+            if len(word) > 15 or re.search(r'[bcdfghjklmnpqrstvwxyz]{7,}', word.lower()):
+                return False, f"Potential gibberish detected: {word}"
+        
+        return True, "Valid"
+    
     def _simple_extract(self, text: str) -> str:
-        """Simple fallback extraction if AI fails"""
+        """Simple fallback extraction if AI fails - with quality checks"""
         sentences = re.split(r'[.!?]+', text)
         
-        # Take first 2-3 sentences
+        # Filter out very short or nonsensical sentences
+        filtered_sentences = []
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence) < 15:  # Too short
+                continue
+            
+            # Check for obvious junk
+            if re.search(r'(cnn\.com|ireporter|http|www\.|\.com has been)', sentence.lower()):
+                continue
+            
+            filtered_sentences.append(sentence)
+        
+        # Take first 2-3 sentences that make sense
         selected = []
         word_count = 0
         
-        for sentence in sentences:
-            sentence = sentence.strip()
+        for sentence in filtered_sentences:
             if not sentence:
                 continue
             
             words_in_sentence = len(sentence.split())
-            if word_count + words_in_sentence <= 60:
+            
+            # Ensure we get at least 30 words total
+            if word_count + words_in_sentence <= 70:
                 selected.append(sentence)
                 word_count += words_in_sentence
+                
+                # Stop if we have enough
+                if word_count >= 40 and len(selected) >= 2:
+                    break
             else:
                 break
         
+        if not selected:
+            return "Performance feedback available; requires manual review for summary"
+        
         result = '. '.join(selected)
-        if result:
+        if result and not result.endswith('.'):
             result += '.'
         
         return self._format_performance_tone(result)
