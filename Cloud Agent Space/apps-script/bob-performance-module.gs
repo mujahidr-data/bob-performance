@@ -58,26 +58,22 @@ const PERF_SHEET_ID = '1rnpUlOcqTpny2Pve2L82qWGI9WplOetx-1Wba7ONoeA';
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('🤖 Bob Automation')
-    // Salary Data Import Functions
-    .addItem('Import Base Data', 'importBobDataSimpleWithLookup')
-    .addItem('Import Bonus History', 'importBobBonusHistoryLatest')
-    .addItem('Import Compensation History', 'importBobCompHistoryLatest')
-    .addItem('Import Full Comp History', 'importBobFullCompHistory')
-    .addItem('Import Performance Ratings', 'importBobPerformanceRatings')
+  ui.createMenu('🚀 Bob Performance Module')
+    .addItem('📊 Import Base Data', 'importBobDataSimpleWithLookup')
+    .addItem('💰 Import Bonus History', 'importBobBonusHistoryLatest')
+    .addItem('📈 Import Compensation History', 'importBobCompHistoryLatest')
+    .addItem('📊 Import Full Comp History', 'importBobFullCompHistory')
+    .addItem('⭐ Import Performance Ratings', 'importBobPerformanceRatings')
     .addSeparator()
-    .addItem('Import All Data', 'importAllBobData')
+    .addItem('📥 Import All Data', 'importAllBobData')
     .addSeparator()
-    .addItem('Build Summary Sheet', 'buildSummarySheet')
+    .addItem('🔧 Build Summary Sheet', 'buildSummarySheet')
+    .addItem('🔄 Update Slicers Only', 'updateSlicersOnly')
+    .addItem('🤖 Generate Manager Blurbs', 'generateManagerBlurbs')
+    .addItem('🎯 Create AI Readiness Mapping', 'createAIReadinessMapping')
     .addSeparator()
-    // Performance Reports Submenu
-    .addSubMenu(ui.createMenu('Performance Reports')
-      .addItem('🚀 Launch Web Interface', 'launchWebInterface')
-      .addSeparator()
-      .addItem('Set HiBob Credentials', 'setHiBobCredentials')
-      .addItem('View Credentials Status', 'viewCredentialsStatus')
-      .addSeparator()
-      .addItem('📖 Instructions & Help', 'showPerformanceReportInstructions'))
+    .addItem('🌐 Launch Web Interface', 'launchWebInterface')
+    .addItem('❓ Instructions & Help', 'showInstructions')
     .addToUi();
 }
 
