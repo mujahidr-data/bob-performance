@@ -2111,6 +2111,42 @@ function buildSummarySheet() {
       }
     });
     
+    // Build Manager Blurbs lookup map
+    const managerBlurbsSheet = ss.getSheetByName("Manager Blurbs");
+    const managerBlurbsMap = new Map();
+    if (managerBlurbsSheet) {
+      const blurbsData = managerBlurbsSheet.getDataRange().getValues();
+      // Skip header row, assuming format: [Emp ID, Blurb]
+      blurbsData.slice(1).forEach(row => {
+        const empId = normalizeEmpId(row[0]);
+        const blurb = row[1] || "";
+        if (empId) {
+          managerBlurbsMap.set(empId, blurb);
+        }
+      });
+      Logger.log(`Loaded ${managerBlurbsMap.size} manager blurbs`);
+    } else {
+      Logger.log("Manager Blurbs sheet not found - blurbs will be empty");
+    }
+    
+    // Build AI Readiness Category lookup map
+    const aiReadinessMappingSheet = ss.getSheetByName("AI Readiness Mapping");
+    const aiReadinessMap = new Map();
+    if (aiReadinessMappingSheet) {
+      const mappingData = aiReadinessMappingSheet.getDataRange().getValues();
+      // Skip header row, assuming format: [Department/Function, AI Readiness Category]
+      mappingData.slice(1).forEach(row => {
+        const dept = String(row[0] || "").trim();
+        const category = String(row[1] || "").trim();
+        if (dept && category) {
+          aiReadinessMap.set(dept, category);
+        }
+      });
+      Logger.log(`Loaded ${aiReadinessMap.size} AI readiness mappings`);
+    } else {
+      Logger.log("AI Readiness Mapping sheet not found - categories will be 'Not Mapped'");
+    }
+    
     // Build data table
     const headerRow = [
       "Emp ID", "Emp Name", "Start Date", "Tenure", "Job Title", "Level", "Manager", 
@@ -2241,14 +2277,14 @@ function buildSummarySheet() {
       }
       
       // Notice Period - if active employee has termination date, they're on notice
-      // We'll set this as a formula later: check if termination date exists for active employee
-      const noticePeriod = ""; // Will be set as formula
+      // We'll set this as value after building data rows
+      const noticePeriod = "";
       
-      // Manager Blurb - will be set as VLOOKUP formula to hidden sheet
-      const managerBlurb = ""; // Will be set as formula
+      // Manager Blurb - lookup from Manager Blurbs sheet
+      const managerBlurb = managerBlurbsMap.get(empId) || "No blurb generated";
       
-      // AI Readiness Category - will be set as VLOOKUP formula from AI Mapping sheet
-      const aiReadinessCategory = ""; // Will be set as formula
+      // AI Readiness Category - lookup from AI Readiness Mapping sheet by department
+      const aiReadinessCategory = aiReadinessMap.get(department) || "Not Mapped";
       
       dataRows.push([
         empIdVal, empName, startDate, tenure, jobTitle, level, manager, department, elt, location,
@@ -2281,23 +2317,14 @@ function buildSummarySheet() {
       noticePeriodRange.setValues(noticePeriodValues);
       noticePeriodRange.setNumberFormat("dd-mmm-yy");
       
-      // Set Manager Blurb formulas (column 24) - VLOOKUP from hidden 'Manager Blurbs' sheet
-      // Formula: =IFERROR(VLOOKUP($A{row},'Manager Blurbs'!$A:$B,2,FALSE),"")
+      // Manager Blurb (column 24) and AI Readiness Category (column 25) are already set as values in dataRows
+      // Just apply text wrapping for better readability
       const managerBlurbCol = 24;
-      const managerBlurbFormulas = dataRows.map((_, i) => [`=IFERROR(VLOOKUP($A${startRow + 1 + i},'Manager Blurbs'!$A:$B,2,FALSE),"No blurb generated")`]);
       const managerBlurbRange = summarySheet.getRange(startRow + 1, managerBlurbCol, dataRows.length, 1);
-      managerBlurbRange.setFormulas(managerBlurbFormulas);
-      // Wrap text for better readability
       managerBlurbRange.setWrap(true);
       
-      // Set AI Readiness Category formulas (column 25) - VLOOKUP from 'AI Readiness Mapping' sheet
-      // Formula: =IFERROR(VLOOKUP($H{row},'AI Readiness Mapping'!$A:$B,2,FALSE),"Not Mapped")
-      // Column H is Department
       const aiReadinessCol = 25;
-      const aiReadinessFormulas = dataRows.map((_, i) => [`=IFERROR(VLOOKUP($H${startRow + 1 + i},'AI Readiness Mapping'!$A:$B,2,FALSE),"Not Mapped")`]);
       const aiReadinessRange = summarySheet.getRange(startRow + 1, aiReadinessCol, dataRows.length, 1);
-      aiReadinessRange.setFormulas(aiReadinessFormulas);
-      // Wrap text for better readability
       aiReadinessRange.setWrap(true);
     }
     
