@@ -1624,6 +1624,16 @@ function testSheetAccess() {
  */
 function buildSummarySheet() {
   try {
+    // Check if Sheets API is available
+    try {
+      if (typeof Sheets === 'undefined') {
+        Logger.log("Warning: Sheets API not enabled. Slicers and charts will use fallback methods.");
+        Logger.log("To enable: Resources > Advanced Google services > Enable Google Sheets API");
+      }
+    } catch (e) {
+      Logger.log("Sheets API check failed: " + e.message);
+    }
+    
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let summarySheet = ss.getSheetByName("Summary");
     
@@ -1902,10 +1912,10 @@ function buildSummarySheet() {
     const helperFormulas = dataRows.map((_, i) => [`=SUBTOTAL(103,$M${startRow + 1 + i})`]);
     summarySheet.getRange(startRow + 1, helperCol, dataRows.length, 1).setFormulas(helperFormulas);
     
-    // Create slicers (rows 4-15)
+    // Create slicers (rows 4-15) - will use Sheets API if available
     createSlicers(summarySheet, dataRows.length, startRow);
     
-    // Build chart data
+    // Build chart data and create chart - will use Sheets API if available
     buildChartData(summarySheet, dataRows, startRow, helperCol);
     
     // Apply conditional formatting
@@ -2023,29 +2033,123 @@ function getFXRate(location) {
 }
 
 /**
- * Create slicers on the Summary sheet
+ * Create slicers on the Summary sheet using Sheets API
  */
 function createSlicers(sheet, numRows, dataStartRow) {
-  // Slicer configuration: {row, col, sourceRange, title, color}
-  const slicers = [
-    {row: 4, col: 1, range: `A${dataStartRow + 1}:A${dataStartRow + numRows}`, title: "ELT", color: "#9825ff"},
-    {row: 4, col: 2, range: `F${dataStartRow + 1}:F${dataStartRow + numRows}`, title: "Level", color: "#9825ff"},
-    {row: 4, col: 3, range: `D${dataStartRow + 1}:D${dataStartRow + numRows}`, title: "Tenure", color: "#9825ff"},
-    {row: 4, col: 4, range: `H${dataStartRow + 1}:H${dataStartRow + numRows}`, title: "Department", color: "#9825ff"},
-    {row: 4, col: 5, range: `K${dataStartRow + 1}:K${dataStartRow + numRows}`, title: "AYR 2024 Rating", color: "#9825ff"},
-    {row: 4, col: 6, range: `U${dataStartRow + 1}:U${dataStartRow + numRows}`, title: "Variable Type", color: "#9825ff"},
-    {row: 4, col: 7, range: `G${dataStartRow + 1}:G${dataStartRow + numRows}`, title: "Manager", color: "#9825ff"},
-    {row: 4, col: 8, range: `L${dataStartRow + 1}:L${dataStartRow + numRows}`, title: "H1 2025", color: "#9825ff"},
-    {row: 4, col: 9, range: `J${dataStartRow + 1}:J${dataStartRow + numRows}`, title: "Location", color: "#9825ff"},
-    {row: 4, col: 10, range: `M${dataStartRow + 1}:M${dataStartRow + numRows}`, title: "Q2/Q3 Rating", color: "#ff9901"},
-    {row: 4, col: 11, range: `N${dataStartRow + 1}:N${dataStartRow + numRows}`, title: "Promotion", color: "#ff9901"},
-    {row: 4, col: 12, range: `W${dataStartRow + 1}:W${dataStartRow + numRows}`, title: "Notice Period", color: "#ff0100"}
-  ];
-  
-  // Note: Creating slicers programmatically requires the Sheets API
-  // For now, we'll create placeholder cells that can be converted to slicers manually
-  // or use the Sheets API if available
-  slicers.forEach((slicer, idx) => {
+  try {
+    const spreadsheetId = sheet.getParent().getId();
+    const sheetId = sheet.getSheetId();
+    
+    // Slicer configuration: {col, sourceRange, title, color, position}
+    const slicers = [
+      {col: 1, range: `A${dataStartRow + 1}:A${dataStartRow + numRows}`, title: "ELT", color: "#9825ff", row: 4, colPos: 1},
+      {col: 6, range: `F${dataStartRow + 1}:F${dataStartRow + numRows}`, title: "Level", color: "#9825ff", row: 4, colPos: 2},
+      {col: 4, range: `D${dataStartRow + 1}:D${dataStartRow + numRows}`, title: "Tenure", color: "#9825ff", row: 4, colPos: 3},
+      {col: 8, range: `H${dataStartRow + 1}:H${dataStartRow + numRows}`, title: "Department", color: "#9825ff", row: 4, colPos: 4},
+      {col: 11, range: `K${dataStartRow + 1}:K${dataStartRow + numRows}`, title: "AYR 2024 Rating", color: "#9825ff", row: 4, colPos: 5},
+      {col: 21, range: `U${dataStartRow + 1}:U${dataStartRow + numRows}`, title: "Variable Type", color: "#9825ff", row: 4, colPos: 6},
+      {col: 7, range: `G${dataStartRow + 1}:G${dataStartRow + numRows}`, title: "Manager", color: "#9825ff", row: 4, colPos: 7},
+      {col: 12, range: `L${dataStartRow + 1}:L${dataStartRow + numRows}`, title: "H1 2025", color: "#9825ff", row: 4, colPos: 8},
+      {col: 10, range: `J${dataStartRow + 1}:J${dataStartRow + numRows}`, title: "Location", color: "#9825ff", row: 4, colPos: 9},
+      {col: 13, range: `M${dataStartRow + 1}:M${dataStartRow + numRows}`, title: "Q2/Q3 Rating", color: "#ff9901", row: 4, colPos: 10},
+      {col: 14, range: `N${dataStartRow + 1}:N${dataStartRow + numRows}`, title: "Promotion", color: "#ff9901", row: 4, colPos: 11},
+      {col: 23, range: `W${dataStartRow + 1}:W${dataStartRow + numRows}`, title: "Notice Period", color: "#ff0100", row: 4, colPos: 12}
+    ];
+    
+    const requests = [];
+    
+    slicers.forEach((slicer, idx) => {
+      // Calculate position for slicer (starting at row 4, column based on colPos)
+      const startRow = slicer.row - 1; // 0-indexed
+      const startCol = slicer.colPos - 1; // 0-indexed
+      const endRow = startRow + 10; // Height of slicer
+      const endCol = startCol; // Width of slicer
+      
+      const slicerRequest = {
+        addSlicer: {
+          slicer: {
+            title: slicer.title,
+            sourceRange: {
+              sheetId: sheetId,
+              startRowIndex: dataStartRow, // Header row
+              endRowIndex: dataStartRow + numRows,
+              startColumnIndex: slicer.col - 1,
+              endColumnIndex: slicer.col
+            },
+            position: {
+              overlayPosition: {
+                anchorCell: {
+                  sheetId: sheetId,
+                  rowIndex: startRow,
+                  columnIndex: startCol
+                },
+                offsetXPixels: 0,
+                offsetYPixels: 0,
+                widthPixels: 120,
+                heightPixels: 200
+              }
+            },
+            style: {
+              theme: "LIGHT",
+              headerStyle: {
+                backgroundColor: {
+                  red: parseInt(slicer.color.substring(1, 3), 16) / 255,
+                  green: parseInt(slicer.color.substring(3, 5), 16) / 255,
+                  blue: parseInt(slicer.color.substring(5, 7), 16) / 255
+                },
+                textFormat: {
+                  foregroundColor: {red: 1, green: 1, blue: 1},
+                  fontFamily: "Roboto",
+                  fontSize: 14,
+                  bold: true
+                }
+              }
+            }
+          }
+        }
+      };
+      
+      requests.push(slicerRequest);
+    });
+    
+    if (requests.length > 0) {
+      try {
+        Sheets.Spreadsheets.batchUpdate({
+          requests: requests
+        }, spreadsheetId);
+        Logger.log(`Created ${requests.length} slicers successfully`);
+      } catch (apiError) {
+        Logger.log(`Sheets API error creating slicers: ${apiError.message}`);
+        // Fallback to placeholder cells
+        createSlicerPlaceholders(sheet, slicers);
+      }
+    }
+  } catch (error) {
+    Logger.log(`Error creating slicers: ${error.message}`);
+    // Fallback to placeholder cells
+    const slicers = [
+      {row: 4, col: 1, title: "ELT", color: "#9825ff"},
+      {row: 4, col: 2, title: "Level", color: "#9825ff"},
+      {row: 4, col: 3, title: "Tenure", color: "#9825ff"},
+      {row: 4, col: 4, title: "Department", color: "#9825ff"},
+      {row: 4, col: 5, title: "AYR 2024 Rating", color: "#9825ff"},
+      {row: 4, col: 6, title: "Variable Type", color: "#9825ff"},
+      {row: 4, col: 7, title: "Manager", color: "#9825ff"},
+      {row: 4, col: 8, title: "H1 2025", color: "#9825ff"},
+      {row: 4, col: 9, title: "Location", color: "#9825ff"},
+      {row: 4, col: 10, title: "Q2/Q3 Rating", color: "#ff9901"},
+      {row: 4, col: 11, title: "Promotion", color: "#ff9901"},
+      {row: 4, col: 12, title: "Notice Period", color: "#ff0100"}
+    ];
+    createSlicerPlaceholders(sheet, slicers);
+  }
+}
+
+/**
+ * Fallback: Create placeholder cells for slicers
+ */
+function createSlicerPlaceholders(sheet, slicers) {
+  slicers.forEach((slicer) => {
     const cell = sheet.getRange(slicer.row, slicer.col);
     cell.setValue(`All - ${slicer.title}`);
     cell.setFontFamily("Roboto");
@@ -2057,7 +2161,7 @@ function createSlicers(sheet, numRows, dataStartRow) {
 }
 
 /**
- * Build chart data for rating distribution
+ * Build chart data and create chart for rating distribution
  */
 function buildChartData(sheet, dataRows, dataStartRow, helperCol) {
   // Rating column is M (13), helper column is AH (34)
@@ -2096,6 +2200,124 @@ function buildChartData(sheet, dataRows, dataStartRow, helperCol) {
   
   // Employee count in I17
   sheet.getRange(17, 9).setFormula(`=COUNTIF(AH${dataStartRow + 1}:AH${dataStartRow + dataRows.length}, 1)`);
+  
+  // Create the chart using Charts API
+  createRatingDistributionChart(sheet, chartStartRow, chartStartCol, ratings.length, dataStartRow);
+}
+
+/**
+ * Create rating distribution chart using Sheets API
+ */
+function createRatingDistributionChart(sheet, chartStartRow, chartStartCol, numRatings, dataStartRow) {
+  try {
+    const spreadsheetId = sheet.getParent().getId();
+    const sheetId = sheet.getSheetId();
+    
+    // Color mapping for ratings (RGB values 0-1)
+    const ratingColors = {
+      "HH": {red: 78/255, green: 167/255, blue: 46/255}, // #4ea72e
+      "HM": {red: 152/255, green: 37/255, blue: 255/255}, // #9825ff
+      "MH": {red: 152/255, green: 37/255, blue: 255/255}, // #9825ff
+      "MM": {red: 152/255, green: 37/255, blue: 255/255}, // #9825ff
+      "ML": {red: 255/255, green: 153/255, blue: 1/255}, // #ff9901
+      "NI": {red: 244/255, green: 199/255, blue: 195/255} // #f4c7c3
+    };
+    
+    // Create a single series for the count data
+    const series = [{
+      series: {
+        sourceRange: {
+          sheets: [{
+            sourceRange: {
+              sheetId: sheetId,
+              startRowIndex: chartStartRow,
+              endRowIndex: chartStartRow + 1 + numRatings,
+              startColumnIndex: chartStartCol, // Count column (G)
+              endColumnIndex: chartStartCol + 1
+            }
+          }]
+          }
+        },
+        targetAxis: "LEFT_AXIS",
+        type: "COLUMN"
+      }];
+    
+    // Chart position - overlay on the data area (rows 1-15, columns F-T)
+    const chartPosition = {
+      overlayPosition: {
+        anchorCell: {
+          sheetId: sheetId,
+          rowIndex: 0, // Row 1
+          columnIndex: chartStartCol - 1 // Column F
+        },
+        offsetXPixels: 0,
+        offsetYPixels: 0,
+        widthPixels: 800,
+        heightPixels: 400
+      }
+    };
+    
+    // Create the chart
+    const chartRequest = {
+      addChart: {
+        chart: {
+          spec: {
+            title: "Rating Distribution",
+            basicChart: {
+              chartType: "COLUMN",
+              legendPosition: "BOTTOM_LEGEND",
+              axis: [
+                {
+                  position: "BOTTOM_AXIS",
+                  title: "Rating"
+                },
+                {
+                  position: "LEFT_AXIS",
+                  title: "Count"
+                }
+              ],
+              domains: [{
+                domain: {
+                  sourceRange: {
+                    sheets: [{
+                      sourceRange: {
+                        sheetId: sheetId,
+                        startRowIndex: chartStartRow,
+                        endRowIndex: chartStartRow + 1 + numRatings,
+                        startColumnIndex: chartStartCol - 1, // Rating column (F)
+                        endColumnIndex: chartStartCol
+                      }
+                    }]
+                  }
+                }
+              }],
+              series: series,
+              headerCount: 1
+            }
+          },
+          position: chartPosition
+        }
+      }
+    };
+    
+    try {
+      Sheets.Spreadsheets.batchUpdate({
+        requests: [chartRequest]
+      }, spreadsheetId);
+      Logger.log("Chart created successfully");
+    } catch (apiError) {
+      Logger.log(`Sheets API error creating chart: ${apiError.message}`);
+      Logger.log("Note: Make sure Sheets API is enabled in Apps Script project");
+      Logger.log("Go to: Resources > Advanced Google services > Enable Google Sheets API");
+      // Chart creation will be skipped, but data is still available
+    }
+  } catch (error) {
+    Logger.log(`Error creating chart: ${error.message}`);
+    if (error.message.includes("Sheets is not defined")) {
+      Logger.log("Sheets API not available. Enable it in: Resources > Advanced Google services");
+    }
+    // Chart creation will be skipped, but data is still available
+  }
 }
 
 /**
