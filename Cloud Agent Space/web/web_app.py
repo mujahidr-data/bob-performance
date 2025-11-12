@@ -202,6 +202,20 @@ class WebHiBobDownloader(HiBobReportDownloader):
                 pass
             raise Exception(error_msg)
     
+    def download_report(self, report_element):
+        """Download report with web logging"""
+        self.log("📥 Starting download...", 'info')
+        try:
+            result = super().download_report(report_element)
+            if result:
+                self.log(f"✅ Download successful: {result}", 'success')
+            else:
+                self.log("❌ Download failed - check terminal for details", 'error')
+            return result
+        except Exception as e:
+            self.log(f"❌ Download exception: {str(e)}", 'error')
+            raise
+    
     def login_to_hibob(self):
         """Login with web logging"""
         self.log("🔐 Logging in to HiBob...", 'info')
@@ -535,14 +549,48 @@ def run_automation(report_name, selected_index=None):
         # Download selected report
         update_status('downloading', f'Downloading report {selected_index}...')
         if 0 <= selected_index - 1 < len(unique_reports):
-            report_element = unique_reports[selected_index - 1]['element']
-            filepath = downloader.download_report(report_element)
+            report_data = unique_reports[selected_index - 1]
+            report_element = report_data.get('element')
+            
+            # If element is stale or None, try to re-find it using the report text
+            if not report_element or (hasattr(report_element, 'is_visible') and not report_element.is_visible()):
+                update_status('downloading', 'Re-finding report element...')
+                report_text = report_data.get('text', '')
+                # Try to re-find the report by text
+                try:
+                    # Navigate back to performance cycles if needed
+                    if 'manage-cycles' not in downloader.page.url:
+                        downloader.navigate_to_performance_cycles()
+                    
+                    # Try to find the report again
+                    report_element = downloader.page.query_selector(f'[role="row"]:has-text("{report_text}")')
+                    if not report_element:
+                        # Try alternative selector
+                        all_rows = downloader.page.query_selector_all('[role="row"]')
+                        for row in all_rows:
+                            if report_text in row.inner_text():
+                                report_element = row
+                                break
+                except Exception as e:
+                    update_status('error', 'Could not re-find report', error=f'Element stale and re-find failed: {str(e)}')
+                    return
+            
+            try:
+                filepath = downloader.download_report(report_element)
+            except Exception as e:
+                error_msg = f'Download exception: {str(e)}'
+                update_status('error', 'Download failed', error=error_msg)
+                import traceback
+                print(f"Download exception traceback: {traceback.format_exc()}")
+                return
         else:
             update_status('error', 'Invalid report index', error=f'Report index {selected_index} is out of range')
             return
         
         if not filepath:
-            update_status('error', 'Download failed', error='Failed to download report')
+            # Check if there are error screenshots that might give us more info
+            error_msg = 'Failed to download report. Check terminal for details.'
+            update_status('error', 'Download failed', error=error_msg)
             return
         
         # Upload to Google Sheets
